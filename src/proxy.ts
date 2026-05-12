@@ -37,30 +37,36 @@ export async function proxy(request: NextRequest) {
 
   // --- Logic การตรวจสอบสิทธิ์ตาม Role ---
 
-  // กรณีไม่ได้ Login และพยายามเข้าหน้าที่ต้องใช้สิทธิ์
-  const protectedPaths = ['/super-admin', '/branch-admin', '/rider']
-  const isProtectedPath = protectedPaths.some(p => path.startsWith(p))
+  // จัดกลุ่ม Path ที่ต้องการป้องกัน (รองรับทั้ง /driver, /admin ตามระบุ และโครงสร้างเดิม)
+  const isDriverPath = path.startsWith('/driver') || path.startsWith('/rider')
+  const isAdminPath = path.startsWith('/admin') || path.startsWith('/super-admin') || path.startsWith('/branch-admin')
+  const isProtectedPath = isDriverPath || isAdminPath
 
+  // 1. ถ้าไม่มี Session ให้เตะไปหน้า /login
   if (!user && isProtectedPath) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   if (user) {
-    const role = user.user_metadata?.role || 'customer'
+    // 2. ถ้ามี Session ให้เช็ค user.app_metadata.role หรือ user.user_metadata.role
+    const role = user.app_metadata?.role || user.user_metadata?.role || 'customer'
 
-    // เช็คสิทธิ์ Super Admin
-    if (path.startsWith('/super-admin') && role !== 'super_admin') {
-      return NextResponse.redirect(new URL('/', request.url))
+    // กำหนดหน้าแรกของแต่ละ Role สำหรับ Redirect กลับไปเมื่อเข้าผิดหน้า
+    const getRoleHome = (currentRole: string) => {
+      if (currentRole === 'rider') return '/rider' // หรือเปลี่ยนเป็น '/driver' ถ้าย้ายโฟลเดอร์แล้ว
+      if (currentRole === 'super_admin') return '/super-admin/branches' // หน้าแรกของ Super Admin
+      if (currentRole === 'branch_admin') return '/branch-admin/inventory' // หน้าแรกของ Branch Admin
+      return '/' // สำหรับ Customer หรือ Role ที่ไม่รู้จัก
     }
 
-    // เช็คสิทธิ์ Branch Admin (Super Admin เข้าได้)
-    if (path.startsWith('/branch-admin') && role !== 'branch_admin' && role !== 'super_admin') {
-      return NextResponse.redirect(new URL('/', request.url))
+    // 3. ถ้า Role เป็น 'rider' ให้เข้าได้เฉพาะหน้า Driver (ถ้าเป็น Role อื่นพยายามเข้า ให้เตะกลับไปหน้าตัวเอง)
+    if (isDriverPath && role !== 'rider') {
+      return NextResponse.redirect(new URL(getRoleHome(role), request.url))
     }
 
-    // เช็คสิทธิ์ Rider (Super Admin เข้าได้)
-    if (path.startsWith('/rider') && role !== 'rider' && role !== 'super_admin') {
-      return NextResponse.redirect(new URL('/', request.url))
+    // 4. ถ้า Role เป็น Admin ให้เข้าหน้า Admin ได้ (ถ้าเป็น Role อื่นพยายามเข้า ให้เตะกลับไปหน้าตัวเอง)
+    if (isAdminPath && role !== 'branch_admin' && role !== 'super_admin') {
+      return NextResponse.redirect(new URL(getRoleHome(role), request.url))
     }
   }
 

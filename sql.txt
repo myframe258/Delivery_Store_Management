@@ -8,8 +8,7 @@ CREATE TABLE public.batch_items (
   sequence_no integer,
   delivery_status text DEFAULT 'pending'::text,
   CONSTRAINT batch_items_pkey PRIMARY KEY (id),
-  CONSTRAINT batch_items_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.delivery_batches(id),
-  CONSTRAINT batch_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+  CONSTRAINT batch_items_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.delivery_batches(id)
 );
 CREATE TABLE public.branch_inventory (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -38,10 +37,12 @@ CREATE TABLE public.delivery_batches (
   driver_id uuid,
   batch_status text DEFAULT 'pending'::text,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT delivery_batches_pkey PRIMARY KEY (id)
+  branch_id bigint,
+  CONSTRAINT delivery_batches_pkey PRIMARY KEY (id),
+  CONSTRAINT delivery_batches_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id)
 );
 CREATE TABLE public.order_items (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   order_id uuid,
   order_code character varying,
@@ -49,8 +50,8 @@ CREATE TABLE public.order_items (
   quantity bigint,
   price_at_purchase character varying,
   CONSTRAINT order_items_pkey PRIMARY KEY (id),
-  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
-  CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+  CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
+  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
 );
 CREATE TABLE public.orders (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -60,10 +61,12 @@ CREATE TABLE public.orders (
   lng double precision NOT NULL,
   status text DEFAULT 'pending'::text,
   created_at timestamp with time zone DEFAULT now(),
-  customer_id bigint,
+  customer_id uuid,
   order_code character varying,
   order_status text,
+  branch_id bigint,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
+  CONSTRAINT orders_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id),
   CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.products (
@@ -78,13 +81,13 @@ CREATE TABLE public.products (
   CONSTRAINT products_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.users (
-  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
   role character varying,
   name character varying,
   phone character varying,
   email character varying,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
   branch_id bigint,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT users_pkey PRIMARY KEY (id),
   CONSTRAINT users_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id)
 );

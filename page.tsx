@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createClient  } from '@/lib/supabase/server';
 import UserCreationForm from '@/components/admin/UserCreationForm';
 
 export default async function SuperAdminUsersPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createClient();
 
   // 1. Security Check: ตรวจสอบสิทธิ์ซ้ำในระดับ Component
   const { data: { user } } = await supabase.auth.getUser();

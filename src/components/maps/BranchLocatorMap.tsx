@@ -34,7 +34,7 @@ export default function BranchLocatorMap({ branches }: { branches: any[] }) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([13.7563, 100.5018]);
   const [mapZoom, setMapZoom] = useState(10);
-  
+
   const router = useRouter();
   const setActiveBranch = useBranchStore((state) => state.setActiveBranch);
 
@@ -54,7 +54,7 @@ export default function BranchLocatorMap({ branches }: { branches: any[] }) {
     navigator.geolocation.getCurrentPosition((position) => {
       const { latitude, longitude } = position.coords;
       setUserLocation([latitude, longitude]);
-        
+
       if (!branches || branches.length === 0) {
         setMapCenter([latitude, longitude]);
         setMapZoom(13);
@@ -92,10 +92,15 @@ export default function BranchLocatorMap({ branches }: { branches: any[] }) {
         </button>
       </div>
 
-      <MapContainer center={mapCenter} zoom={mapZoom} className="flex-1 w-full z-0">
+      <MapContainer
+        center={mapCenter}
+        zoom={mapZoom}
+        style={{ height: '600px', width: '100%' }} // ใส่แบบระบุตัวเลข px ไปเลย
+        className="z-0"
+      >
         <ChangeView center={mapCenter} zoom={mapZoom} />
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        
+
         {userLocation && (
           <Marker position={userLocation} icon={userIcon}>
             <Popup><div className="font-bold text-center">📍 ตำแหน่งของคุณ</div></Popup>

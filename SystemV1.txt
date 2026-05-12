@@ -1,0 +1,114 @@
+1. System Architecture (โครงสร้างโฟลเดอร์โปรเจกต์ Next.js)
+เนื่องจากระบบมีผู้ใช้งานหลายกลุ่ม (Super Admin, Branch Admin, Rider, Customer) การใช้ Next.js App Router จะช่วยให้เราแยก Route Group และ Layout ได้ชัดเจน รวมถึงง่ายต่อการทำ Middleware เพื่อตรวจสอบสิทธิ์ (Role-based Authorization)
+
+text
+src/
+├── app/
+│   ├── (customer)/             # กลุ่มหน้าสำหรับลูกค้า
+│   │   ├── page.tsx            # หน้าค้นหา/เลือกสาขาที่ใกล้ที่สุด (Branch Locator)
+│   │   ├── [branchId]/         # หน้า Storefront ของแต่ละสาขา
+│   │   │   ├── page.tsx        # แสดงสินค้าตามสาขา (อิงจาก branch_inventory)
+│   │   │   └── cart/           # หน้าตะกร้าสินค้าและ Checkout
+│   │   └── track/[orderId]/    # หน้าติดตามสถานะออเดอร์
+│   ├── super-admin/            # กลุ่มหน้าสำหรับ Super Admin
+│   │   ├── branches/           # จัดการข้อมูลสาขา
+│   │   └── users/              # จัดการผู้ใช้งาน (สร้าง Branch Admin/Rider)
+│   ├── branch-admin/           # กลุ่มหน้าสำหรับ Branch Admin
+│   │   ├── inventory/          # จัดการสต็อกสินค้าของสาขาตัวเอง
+│   │   └── batching/           # Interactive Map สำหรับจัดรอบส่ง (Route Optimization)
+│   ├── rider/                  # กลุ่มหน้าสำหรับ Rider (เน้น PWA Mobile View)
+│   │   └── batches/            # ดูรอบส่งและจุดส่งของตัวเอง
+│   └── api/                    # Backend API Endpoints (Next.js Route Handlers)
+│
+├── components/                 # Reusable Components
+│   ├── ui/                     # UI Components (แนะนำ shadcn/ui)
+│   ├── maps/                   # Map Components (Leaflet สำหรับปักหมุด/Lasso)
+│   └── layouts/                # Navbars, Sidebars แยกตาม Role
+│
+├── lib/                        # Utility functions
+│   ├── supabase/               # Supabase Client & Database Types
+│   ├── geo/                    # ฟังก์ชันคำนวณระยะทาง (Geofencing)
+│   └── google-maps.ts          # Server-side SDK สำหรับ Route Optimization (TSP)
+│
+└── store/                      # Global State Management (Zustand)
+    ├── cartStore.ts            # จัดการตะกร้าสินค้า
+    └── branchStore.ts          # เก็บ State ว่าลูกค้ากำลังเลือกดูสาขาไหนอยู่
+2. Database Schema & Relations
+จากการวิเคราะห์ sql.txt เทียบกับ PRD v2 ผมพบว่าโครงสร้างเดิมมีตารางรองรับสาขาแล้ว (branches, branch_inventory) แต่ยังมีคอลัมน์ที่ขาดหายไปตาม PRD v2 ผมขอสรุป Schema และ Relation พร้อมจุดที่ต้องแก้ไข (Alter Table) ดังนี้:
+
+1. branches (ตารางสาขา)
+
+Relations:
+One-to-Many -> branch_inventory, users (พนักงาน/คนขับประจำสาขา), orders, delivery_batches
+2. users (ตารางผู้ใช้งาน)
+
+Relations:
+Many-to-One -> branches (branch_id ระบุว่าพนักงานอยู่สาขาไหน)
+One-to-Many -> orders (customer_id), delivery_batches (driver_id)
+3. products (ตารางสินค้า Master)
+
+เป็นรายการสินค้าส่วนกลาง (Super Admin จัดการ) สต็อกที่นี่อาจจะเป็น Total Stock
+Relations: One-to-Many -> branch_inventory, order_items
+4. branch_inventory (ตารางสต็อกแยกสาขา) (ชื่อตารางใน SQL ตรงกับ Branch_Products ใน PRD)
+
+Relations (Many-to-Many Bridge): เชื่อมระหว่าง branches กับ products
+5. orders (ตารางคำสั่งซื้อ)
+
+⚠️ จุดที่ต้องแก้จาก sql.txt: ต้องเพิ่มคอลัมน์ branch_id (UUID/BigInt) เพื่อระบุว่าออเดอร์นี้เป็นของสาขาไหน Branch Admin จะได้มองไม่เห็นออเดอร์ข้ามสาขา
+Relations:
+Many-to-One -> branches, users
+One-to-Many -> order_items
+One-to-One -> batch_items
+6. order_items (ตารางรายละเอียดสินค้าในออเดอร์)
+
+Relations (Many-to-Many Bridge): เชื่อม orders กับ products
+7. delivery_batches (ตารางรอบการจัดส่ง)
+
+⚠️ จุดที่ต้องแก้จาก sql.txt: ต้องเพิ่มคอลัมน์ branch_id (เพื่อให้ Branch Admin จัดการได้เฉพาะรอบของสาขาตัวเอง)
+Relations: Many-to-One -> branches, users (driver_id)
+8. batch_items (ตารางจุดส่งในแต่ละรอบ)
+
+Relations: Many-to-One -> delivery_batches, orders
+3. API Endpoints
+เนื่องจากมีเงื่อนไขของสาขา (Branch-specific) API จะมีความซับซ้อนขึ้น ดังนี้ครับ:
+
+🟢 Customer APIs
+
+GET /api/branches/nearest?lat={lat}&lng={lng} - ค้นหาสาขาที่ให้บริการครอบคลุมพิกัดลูกค้า (Geofencing)
+GET /api/branches/[branchId]/products - ดึงแคตตาล็อกสินค้า ที่มีสต็อก ในสาขานั้น (branch_inventory)
+POST /api/orders - สร้างออเดอร์ (ต้องส่ง branch_id เข้ามาด้วย)
+🔵 Super Admin APIs
+
+CRUD /api/admin/branches - จัดการเพิ่ม/ลดสาขา และรัศมีบริการ
+CRUD /api/admin/products - จัดการฐานข้อมูลสินค้ากลาง
+GET /api/admin/analytics - ดูยอดขายและภาพรวมแยกตามสาขา
+🟡 Branch Admin APIs
+
+GET /api/branch/[branchId]/inventory - จัดการและดูสต็อกเฉพาะสาขาตัวเอง
+GET /api/branch/[branchId]/orders?status=pending - ดึงออเดอร์ที่รอจัดส่งของสาขานี้เพื่อพล็อตลงแผนที่
+POST /api/branch/[branchId]/batches/optimize - [Core Feature] ส่ง branch_id (เป็นจุด Start) และพิกัดลูกค้าที่เลือก ไปให้ Google Maps Directions API เพื่อจัดเรียง Route (TSP)
+POST /api/branch/[branchId]/batches - ยืนยันการสร้างรอบบิลและ Assign ให้ Rider
+🟣 Rider APIs
+
+GET /api/rider/batches - ดู Batch ที่ตัวเองได้รับมอบหมาย (Rider สังกัดสาขาไหน จะเห็นแค่งานนั้น)
+PUT /api/rider/batches/items/[id]/status - อัปเดตสถานะรายจุด
+4. Library Recommendation
+สำหรับ Tech Stack เพื่อรองรับ PWA และฟีเจอร์แผนที่ตาม PRD v2 แนะนำให้ติดตั้งเพิ่มเติมดังนี้ครับ:
+
+1.UI & Styling:
+    - tailwindcss
+    - lucide-react (Icon เบา ใช้งานง่าย)
+    - shadcn/ui (Components พื้นฐานที่สร้างจาก Radix UI ช่วยให้ทำ Dashboard สำหรับ Admin ได้เร็วมาก)
+2.State Management:
+    - zustand (ตามที่โปรเจกต์มีใช้อยู่แล้ว ดีมากสำหรับการจัดการ Cart และ Active Branch)
+3.Map & Geospatial (Frontend):
+    - leaflet & react-leaflet (สำหรับ Interactive Map วาด Polygon รัศมีสาขา และ Lasso เลือกออเดอร์)
+4.Map & Routing (Backend/Server-side):
+    - @googlemaps/google-maps-services-js (ใช้ฝั่ง Node.js/Next API เพื่อยิงหา Directions API พร้อมเปิดโหมด optimize: true โดยไม่ต้องเปิดเผย API Key ฝั่ง Client)
+    - geolib หรือ @turf/turf (ใช้ฝั่ง Backend คำนวณระยะทางแบบเส้นตรง (Haversine) อย่างรวดเร็ว เพื่อเช็คว่าลูกค้าอยู่ใน service_radius ของสาขาหรือไม่ ก่อนที่จะบันทึกออเดอร์)
+5.Database & Auth:
+    - @supabase/supabase-js และ @supabase/ssr (สำหรับการจัดการ Session ของ Next.js App Router)
+6.PWA:
+    -+next-pwa (ช่วยทำ Service Worker เพื่อให้ Rider ติดตั้งแอปลงมือถือและใช้งานแบบ Offline-first ได้ในบางฟีเจอร์)
+
+ข้อเสนอแนะเชิงสถาปัตยกรรม: ก่อนเริ่มโค้ดฟีเจอร์อื่น ผมแนะนำให้ทำ ALTER TABLE ใน Supabase เพื่อเพิ่ม branch_id ลงในตาราง orders และ delivery_batches ก่อนครับ และควรเปิดใช้งาน Row Level Security (RLS) ของ Supabase ให้สิทธิ์ Branch Admin เข้าถึงข้อมูลที่มี branch_id ตรงกับตนเองเท่านั้น เพื่อความปลอดภัยครับ

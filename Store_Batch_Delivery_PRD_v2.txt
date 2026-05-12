@@ -1,0 +1,61 @@
+Product Requirements Document (PRD) - Version 2 (Updated with Branches)
+Project Name: Multi-Branch Store & Batch Delivery Management System
+
+1. ข้อมูลภาพรวม (Project Overview)
+สร้างระบบบริหารจัดการที่ครอบคลุมตั้งแต่การขายสินค้าไปจนถึงการจัดส่งในรูปแบบ "การส่งเป็นรอบ" (Batch Delivery) โดยเพิ่มขีดความสามารถในการรองรับ "หลายสาขา" (Multi-Branch) เพื่อให้แต่ละสาขาสามารถจัดการสต็อกสินค้าและรอบการส่งของตนเองได้อย่างเป็นเอกเทศ พร้อมระบบคำนวณเส้นทาง (Route Optimization) เพื่อประหยัดเวลาและต้นทุนในพื้นที่ต่างจังหวัด
+
+2. กลุ่มผู้ใช้งาน (Target Users)
+- Super Admin (เจ้าของธุรกิจ): จัดการภาพรวมทั้งหมด รวมถึงการเพิ่ม/ลบสาขา
+- Branch Admin (ผู้จัดการสาขา): จัดการรายการสินค้าในสาขา, ตรวจสอบออเดอร์, และวางแผนรอบส่งของสาขาตนเอง
+- Driver/Rider (ผู้ส่งสินค้า): ดูรายการออเดอร์ที่ต้องส่งตามลำดับที่สาขามอบหมาย
+- Customer (ลูกค้า): เลือกสาขาที่ใกล้ที่สุด, สั่งซื้อสินค้า, ปักหมุดที่ตั้ง, และติดตามสถานะ
+
+3. ขั้นตอนการทำงานของระบบ (Conceptual Workflow)
+1. Branch Management: Super Admin ตั้งค่าข้อมูลสาขา (พิกัด, ชื่อ, ขอบเขตพื้นที่บริการ)
+2. Inventory Management: แต่ละสาขาจัดการรายการสินค้าและสต็อกของตนเอง
+3. Storefront & Branch Selection: ลูกค้าเข้าเว็บและเลือกสาขา (หรือระบบเลือกให้อัตโนมัติจากตำแหน่ง)
+4. Order Processing: ออเดอร์ถูกส่งไปยังสาขาที่รับผิดชอบตามพิกัดที่ลูกค้าปักหมุด
+5. Batching & Optimization: ผู้จัดการสาขาจัดกลุ่มออเดอร์และระบบคำนวณเส้นทางจากพิกัดสาขาไปยังบ้านลูกค้า
+6. Delivery: คนขับรับงานจากสาขาและวิ่งส่งตามลำดับที่สั้นที่สุด
+
+4. คุณสมบัติหลักที่ต้องมี (Core Features)
+
+4.1 สำหรับลูกค้า (Storefront & Branch Selection)
+- Branch Locator: ระบบค้นหาสาขาที่ใกล้ที่สุด หรือให้ลูกค้าเลือกสาขาเองบนแผนที่
+- Branch-Specific Catalog: แสดงสินค้าที่มีจำหน่ายและจำนวนสต็อกแยกตามสาขาที่เลือก
+- Address Pinning: ลูกค้าปักหมุดที่อยู่ ระบบตรวจสอบระยะทางจาก "สาขาที่เลือก" ทันที
+- Distance Restriction: ตรวจสอบระยะส่ง (เช่น 15-20 กม. จากสาขานั้นๆ) หากไกลเกินไปจะแจ้งเตือน
+
+4.2 สำหรับ Admin (Central & Branch Management)
+- Multi-Branch Dashboard: ระบบจัดการข้อมูลสาขา (Location, Contact, Service Radius)
+- Product & Stock by Branch: ระบบจัดการสินค้าที่สามารถกำหนดสต็อกแยกตามสาขาได้
+- Centralized Orders: Super Admin เห็นออเดอร์ทั้งหมด แต่ Branch Admin เห็นเฉพาะของสาขาตนเอง
+- Branch-Based Batching: ระบบเลือกหมุดออเดอร์บนแผนที่เฉพาะออเดอร์ที่สังกัดสาขานั้นๆ
+- Route Optimizer: คำนวณลำดับจุดส่งโดยใช้พิกัดของสาขาเป็นจุดเริ่มต้น (Starting Point)
+
+4.3 สำหรับคนขับ (Rider Interface)
+- Branch Assignment: แสดงงานที่ได้รับมอบหมายแยกตามสาขาต้นทาง
+- Navigation: ปุ่ม "Navigate" เชื่อมต่อ Google Maps จากสาขาไปยังลูกค้าลำดับถัดไป
+- Status Update: ยืนยันการรับของจากสาขา และยืนยันการส่งในแต่ละจุด
+
+5. ข้อกำหนดทางด้านข้อมูล (Data Requirements)
+- Branches (New): id, name, address, lat, lng, service_radius, phone
+- Products: id, name, description, price, total_stock, image_url
+- Branch_Products (New): branch_id, product_id, stock_count (เพื่อเก็บสต็อกแยกตามสาขา)
+- Orders: id, branch_id, customer_info, product_list, total_price, lat, lng, status
+- DeliveryBatch: id, branch_id, driver_id, batch_status, created_at
+
+6. เครื่องมือทางเทคนิค (Technical Stack)
+- Platform: Web App (PWA)
+- Map Library: Leaflet.js สำหรับ Dashboard และหน้าเลือกสาขา
+- Routing API: Google Maps Directions API (optimizeWaypoints: true)
+- Spatial Query: ระบบคำนวณหารัศมีสาขา (Geofencing) เพื่อจับคู่ออเดอร์กับสาขาที่ใกล้ที่สุด
+
+7. แผนการขยายผลใน 1 ปี (Future Roadmap)
+- Driver Payout by Branch: ระบบคำนวณค่าตอบแทนคนขับแยกตามผลงานในแต่ละสาขา
+- Inventory Transfer: ระบบโอนย้ายสินค้าระหว่างสาขาในกรณีสินค้าขาดแคลน
+- Advanced Analytics: รายงานยอดขายและประสิทธิภาพการส่งเปรียบเทียบระหว่างสาขา
+
+8. ข้อควรระวัง (Constraints)
+- Branch Coordination: การจัดการกรณีลูกค้าปักหมุดก้ำกึ่งระหว่างสองสาขา (ต้องมีระบบตัดสินใจหรือให้เลือกเอง)
+- Capacity Limit per Branch: แต่ละสาขามียานพาหนะไม่เท่ากัน ระบบต้องรองรับการตั้งค่าขีดจำกัดแยกสาขา

@@ -1,0 +1,90 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.batch_items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  batch_id uuid,
+  order_id uuid,
+  sequence_no integer,
+  delivery_status text DEFAULT 'pending'::text,
+  CONSTRAINT batch_items_pkey PRIMARY KEY (id),
+  CONSTRAINT batch_items_batch_id_fkey FOREIGN KEY (batch_id) REFERENCES public.delivery_batches(id),
+  CONSTRAINT batch_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id)
+);
+CREATE TABLE public.branch_inventory (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  branch_id bigint,
+  product_id uuid,
+  stock bigint DEFAULT '0'::bigint,
+  updated_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  status smallint DEFAULT '0'::smallint,
+  CONSTRAINT branch_inventory_pkey PRIMARY KEY (id),
+  CONSTRAINT branch_inventory_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id),
+  CONSTRAINT branch_inventory_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+CREATE TABLE public.branches (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  name character varying,
+  address text,
+  lat double precision,
+  lng double precision,
+  phone character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT branches_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.delivery_batches (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  driver_id uuid,
+  batch_status text DEFAULT 'pending'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT delivery_batches_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.order_items (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  order_id uuid,
+  order_code character varying,
+  product_id uuid,
+  quantity bigint,
+  price_at_purchase character varying,
+  CONSTRAINT order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
+  CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+CREATE TABLE public.orders (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  customer_info jsonb,
+  total_price numeric,
+  lat double precision NOT NULL,
+  lng double precision NOT NULL,
+  status text DEFAULT 'pending'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  customer_id bigint,
+  order_code character varying,
+  order_status text,
+  CONSTRAINT orders_pkey PRIMARY KEY (id),
+  CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.products (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  description text,
+  price numeric NOT NULL,
+  stock integer DEFAULT 0,
+  image_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  products_id bigint,
+  CONSTRAINT products_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  role character varying,
+  name character varying,
+  phone character varying,
+  email character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  branch_id bigint,
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id)
+);

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import AddToCartButton from '@/components/ui/AddToCartButton';
 
 export default async function BranchStorefrontPage({
   params,
@@ -87,9 +88,7 @@ export default async function BranchStorefrontPage({
                     <span className="font-bold text-lg text-blue-600">฿{product.price.toLocaleString()}</span>
                     <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded">เหลือ: {product.stock}</span>
                   </div>
-                  <button className="w-full bg-slate-800 text-white py-2 rounded-lg text-sm hover:bg-slate-700 transition shadow-sm font-medium">
-                    เพิ่มลงตะกร้า
-                  </button>
+                  <AddToCartButton product={product} branchId={branchId} />
                 </div>
               </div>
             ))}

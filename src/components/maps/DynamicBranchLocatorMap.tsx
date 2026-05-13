@@ -2,11 +2,18 @@
 
 import dynamic from 'next/dynamic';
 
-const BranchLocatorMap = dynamic(() => import('./BranchLocatorMap'), {
-  ssr: false,
-  loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-500">กำลังโหลดแผนที่...</div>
-});
+// โหลด Component แผนที่แบบไม่ทำ SSR (Server-Side Rendering)
+// เพื่อป้องกัน Error: "window is not defined" จากการเรียกใช้ Leaflet ฝั่ง Server
+const DynamicBranchLocatorMap = dynamic(
+  () => import('./BranchLocatorMap'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[500px] bg-slate-50 flex items-center justify-center rounded-xl animate-pulse">
+        <p className="text-slate-500 font-medium text-lg">กำลังโหลดแผนที่...</p>
+      </div>
+    ),
+  }
+);
 
-export default function DynamicBranchLocatorMap({ branches }: { branches: any[] }) {
-  return <BranchLocatorMap branches={branches} />;
-}
+export default DynamicBranchLocatorMap;

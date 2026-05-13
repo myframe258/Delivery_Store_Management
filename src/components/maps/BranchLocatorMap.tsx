@@ -1,127 +1,95 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useBranchStore } from '../../store/branchStore';
+import { useBranchStore } from '@/store/branchStore';
 
-// ไอคอนสำหรับสาขา (สีน้ำเงิน)
-const storeIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+// แก้ปัญหา Next.js โหลดไอคอน Marker ของ Leaflet ไม่ขึ้น
+const icon = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
   iconSize: [25, 41],
-  iconAnchor: [12, 41]
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  tooltipAnchor: [16, -28],
+  shadowSize: [41, 41]
 });
 
-// ไอคอนสำหรับตำแหน่งลูกค้า (สีแดง)
-const userIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
-});
-
-// Component สำหรับให้ React-Leaflet เลื่อนแผนที่ไปที่ Center ใหม่ได้
-function ChangeView({ center, zoom }: { center: [number, number], zoom: number }) {
-  const map = useMap();
-  map.setView(center, zoom);
-  return null;
+interface Branch {
+  id: string | number;
+  name: string;
+  lat: number | string;
+  lng: number | string;
+  address?: string;
 }
 
-export default function BranchLocatorMap({ branches }: { branches: any[] }) {
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([13.7563, 100.5018]);
-  const [mapZoom, setMapZoom] = useState(10);
+interface MapProps {
+  branches: Branch[];
+}
 
+export default function BranchLocatorMap({ branches }: MapProps) {
   const router = useRouter();
-  const setActiveBranch = useBranchStore((state) => state.setActiveBranch);
+  const setActiveBranchId = useBranchStore((state) => state.setActiveBranchId);
+  const [mounted, setMounted] = useState(false);
+  
+  // ป้องกันปัญหา appendChild โดยการรอให้ React นำ Component ไปแปะใน DOM ก่อน
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  // เมื่อลูกค้ากดเลือกร้าน
-  const handleSelectBranch = (branch: any) => {
-    setActiveBranch(branch);
-    router.push(`/${branch.id}`); // นำทางไปหน้า Storefront ของสาขานั้น
+  // Auto Center: กำหนดพิกัดเริ่มต้นไปที่สาขาแรก ถ้าไม่มีให้ใช้พิกัดกรุงเทพฯ
+  const mapCenter: [number, number] = branches?.length > 0 && branches[0].lat && branches[0].lng
+    ? [Number(branches[0].lat), Number(branches[0].lng)]
+    : [13.7563, 100.5018];
+
+  const handleSelectBranch = (branchId: string) => {
+    // 1. บันทึก ID ลง Zustand (localStorage)
+    setActiveBranchId(branchId);
+    
+    // 2. เปลี่ยนหน้าไปที่ Storefront ของสาขานั้น (อิงจาก Route [branchId])
+    router.push(`/${branchId}`);
   };
 
-  // ฟังก์ชันขอพิกัดผู้ใช้และหาสาขาที่ใกล้ที่สุด
-  const findNearestBranch = () => {
-    if (!navigator.geolocation) {
-      alert("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition((position) => {
-      const { latitude, longitude } = position.coords;
-      setUserLocation([latitude, longitude]);
-
-      if (!branches || branches.length === 0) {
-        setMapCenter([latitude, longitude]);
-        setMapZoom(13);
-        return;
-      }
-
-      // คำนวณระยะทางที่ใกล้ที่สุด (สูตรพีทาโกรัสอย่างง่ายสำหรับ Lat/Lng)
-      let nearest = branches[0];
-      let minDistance = Infinity;
-
-      branches.forEach(branch => {
-        if (branch.lat && branch.lng) {
-          const dist = Math.sqrt(Math.pow(branch.lat - latitude, 2) + Math.pow(branch.lng - longitude, 2));
-          if (dist < minDistance) {
-            minDistance = dist;
-            nearest = branch;
-          }
-        }
-      });
-
-      // เลื่อนกล้องไปที่สาขาที่ใกล้ที่สุด
-      setMapCenter([nearest.lat, nearest.lng]);
-      setMapZoom(13);
-    }, (error) => {
-      alert("ไม่สามารถดึงตำแหน่งของคุณได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง");
-    });
-  };
+  // ถ้า Component ยังไม่ถูก Mount จะไม่คืนค่าอะไรออกไป (รอจน Client พร้อม 100%)
+  if (!mounted) return null;
 
   return (
-    <div className="relative h-full w-full flex flex-col">
-      {/* ปุ่มค้นหาตำแหน่ง */}
-      <div className="absolute top-4 right-4 z-[400]">
-        <button onClick={findNearestBranch} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg shadow-md font-medium transition">
-          📍 ค้นหาสาขาใกล้ฉัน
-        </button>
-      </div>
+    <MapContainer 
+      key={branches?.length || 0}
+      center={mapCenter} 
+      zoom={6} 
+      style={{ height: '500px', width: '100%' }}
+      className="z-0 relative rounded-xl overflow-hidden"
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      
+      {branches?.map((branch) => {
+        // แปลงค่าพิกัดให้เป็นตัวเลขเสมอ เผื่อกรณีที่ฐานข้อมูลส่งมาเป็น string
+        const lat = Number(branch.lat);
+        const lng = Number(branch.lng);
 
-      <MapContainer
-        center={mapCenter}
-        zoom={mapZoom}
-        style={{ height: '600px', width: '100%' }} // ใส่แบบระบุตัวเลข px ไปเลย
-        className="z-0"
-      >
-        <ChangeView center={mapCenter} zoom={mapZoom} />
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-        {userLocation && (
-          <Marker position={userLocation} icon={userIcon}>
-            <Popup><div className="font-bold text-center">📍 ตำแหน่งของคุณ</div></Popup>
-          </Marker>
-        )}
-
-        {branches?.map((branch) => (
-          <Marker key={branch.id} position={[branch.lat, branch.lng]} icon={storeIcon}>
+        return lat && lng ? (
+          <Marker key={branch.id} position={[lat, lng]} icon={icon}>
             <Popup>
-              <div className="p-1 min-w-[200px]">
-                <h3 className="font-bold text-lg text-slate-800">{branch.name}</h3>
-                <p className="text-sm text-gray-600 my-2">{branch.address}</p>
-                {branch.phone && <p className="text-sm text-gray-500 mb-3">📞 {branch.phone}</p>}
-                <button onClick={() => handleSelectBranch(branch)} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-md font-medium transition-colors">
-                  เลือกร้านนี้
+              <div className="text-center p-1 min-w-[150px]">
+                <h3 className="font-bold text-base mb-1 text-slate-800">{branch.name}</h3>
+                <button
+                  onClick={() => handleSelectBranch(branch.id.toString())}
+                  className="mt-3 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition w-full shadow-sm"
+                >
+                  เลือกสาขานี้
                 </button>
               </div>
             </Popup>
           </Marker>
-        ))}
-      </MapContainer>
-    </div>
+        ) : null;
+      })}
+    </MapContainer>
   );
 }

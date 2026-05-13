@@ -1,20 +1,19 @@
 import { create } from 'zustand';
-
-export interface Branch {
-  id: number;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  phone: string;
-}
+import { persist } from 'zustand/middleware';
 
 interface BranchState {
-  activeBranch: Branch | null;
-  setActiveBranch: (branch: Branch) => void;
+  activeBranchId: string | null;
+  setActiveBranchId: (id: string) => void;
 }
 
-export const useBranchStore = create<BranchState>((set) => ({
-  activeBranch: null,
-  setActiveBranch: (branch) => set({ activeBranch: branch }),
-}));
+export const useBranchStore = create<BranchState>()(
+  persist(
+    (set) => ({
+      activeBranchId: null,
+      setActiveBranchId: (id) => set({ activeBranchId: id }),
+    }),
+    {
+      name: 'branch-storage', // จะถูกบันทึกลงใน localStorage อัตโนมัติ
+    }
+  )
+);

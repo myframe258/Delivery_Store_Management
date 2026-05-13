@@ -26,8 +26,8 @@ CREATE TABLE public.branches (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   name character varying,
   address text,
-  lat double precision,
-  lng double precision,
+  lat text,
+  lng text,
   phone character varying,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT branches_pkey PRIMARY KEY (id)

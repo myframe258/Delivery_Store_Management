@@ -1,0 +1,38 @@
+สวัสดีครับ ในฐานะ Senior Full-stack Developer และ Project Manager ผมได้ทำการ Audit โปรเจกต์ Batch Delivery Store Management ของคุณอย่างละเอียดจากซอร์สโค้ดและเอกสาร PRD ทั้งหมดที่แนบมาให้ครับ
+
+ภาพรวมถือว่าคุณวางสถาปัตยกรรม (Architecture) ได้ยอดเยี่ยมมาก โครงสร้างโค้ดมีความเป็นระเบียบและใช้ฟีเจอร์ของ Next.js App Router ได้อย่างถูกต้องครับ
+
+นี่คือรายงานการวิเคราะห์และประเมินสถานะโปรเจกต์ของคุณในปัจจุบันครับ:
+
+1. Current Progress (สถานะปัจจุบัน)
+จากไฟล์โค้ดที่มีอยู่ โปรเจกต์ได้ผ่านพ้นระยะ Foundation (การวางโครงสร้าง) และเข้าสู่ช่วงพัฒนา Core Feature ฝั่งลูกค้าไปได้กว่า 90% แล้วครับ:
+
+Infrastructure & Auth: ติดตั้ง Next.js 16, Tailwind CSS v4, Zustand และ Supabase SSR ได้สมบูรณ์ พร้อมระบบ Role-based Redirect ในหน้า /dashboard
+Branch Selection Flow: หน้าค้นหาสาขา (Branch Locator) ดึงพิกัดจากฐานข้อมูลและแสดงผลบนแผนที่ Leaflet ได้จริง พร้อมจัดเก็บ State ลง branchStore
+E-Commerce Flow: หน้าร้านค้า (/[branchId]/page.tsx) ดึงสต็อกสินค้าแบบแยกสาขาได้สำเร็จ ระบบตะกร้าสินค้า (cartStore.ts) ทำงานได้สมบูรณ์ (เพิ่ม, ลด, คำนวณราคา)
+Checkout & Map Pinning: หน้า Checkout สร้างเสร็จแล้ว ลูกค้าสามารถกรอกฟอร์ม ปักหมุดที่อยู่ลงบนแผนที่ (Draggable Marker) และ Insert ข้อมูลลงตาราง orders และ order_items ใน Supabase ได้สำเร็จ
+2. Technical Integrity (ความถูกต้องเชิงเทคนิค)
+การตั้งค่า Next.js App Router (Client/Server): ทำได้ ยอดเยี่ยมและถูกต้องตามมาตรฐาน 100% ครับ มีการแยกหน้ารายการสินค้าเป็น Server Component เพื่อดึงข้อมูลตรงจาก Database (SEO ดี, โหลดไว) และแยกปุ่ม AddToCartButton รวมถึงฟอร์ม Checkout เป็น Client Component อย่างถูกต้อง
+ระบบแผนที่ (Leaflet) & Supabase: แก้ปัญหาเรื่องพิกัดและ SSR ได้เด็ดขาด การใช้ next/dynamic ร่วมกับ { ssr: false } ใน DynamicBranchLocatorMap.tsx และ CheckoutMap.tsx เป็น Best Practice ที่ป้องกันปัญหา window is not defined ได้สมบูรณ์แบบ
+ไฟล์ Configuration (Tailwind v4 & CSS): การตั้งค่าถูกต้องครับ ใน postcss.config.js ใช้ @tailwindcss/postcss และ globals.css ใช้ @import "tailwindcss"; ตรงตามมาตรฐาน Tailwind v4 ทุกประการ รวมถึงการเรียก leaflet.css ไว้เหนือ globals.css ใน layout.tsx ก็ช่วยป้องกันปัญหาสไตล์ตีกันได้ดีครับ
+3. Gap Analysis (สิ่งที่ยังขาดหายเทียบกับ PRD)
+แม้ฝั่งลูกค้าจะเกือบสมบูรณ์ แต่ฟีเจอร์ฝั่ง "หลังบ้าน" และ "คนขับ" ตามแผนงาน (PRD Step 3-5) ยังไม่ได้ถูกพัฒนา ดังนี้ครับ:
+
+หน้า Success Page ฝั่งลูกค้า: โค้ดในหน้า Checkout สั่งให้เปลี่ยนหน้าไปที่ /checkout/success เมื่อสั่งซื้อเสร็จ แต่ไฟล์นี้ยังไม่ได้ถูกสร้างขึ้น
+หน้า Branch Admin Batching Map: แดชบอร์ดสำหรับผู้จัดการสาขา ที่ต้องดึงออเดอร์ (status: 'pending') มาแสดงเป็นหมุดบนแผนที่ และสามารถลากกรอบ (Lasso) เพื่อรวมกลุ่มออเดอร์เป็นรอบการส่ง (Delivery Batch) ยังไม่ได้ถูกพัฒนา
+ระบบ Route Optimization (TSP): ยังไม่มี API หลังบ้านที่ทำหน้าที่รับพิกัดลูกค้าในรอบนั้นๆ ไปส่งให้ Google Maps API คำนวณเพื่อหาลำดับจุดส่งที่สั้นที่สุด
+Rider Interface (Mobile PWA): หน้าจอของคนขับสำหรับดูคิวการส่ง (Sequence), ปุ่มเปิด Google Maps นำทาง, และฟีเจอร์ถ่ายรูปยืนยันการส่งมอบ (POD)
+4. Immediate Next Steps (3 ขั้นตอนถัดไปที่ต้องทำทันที)
+เพื่อให้ระบบไปถึงจุด MVP (Minimum Viable Product) ที่นำไปรันวงจรการทำงานได้จริง นี่คือสิ่งที่ทีมต้องโฟกัสใน Sprint ถัดไปครับ:
+
+ลำดับที่ 1: เคลียร์ฝั่งลูกค้าให้จบ (Success Page): สร้างหน้า /checkout/success เพื่อแจ้งเตือนลูกค้าว่ารับออเดอร์สำเร็จ พร้อมแสดงหมายเลขออเดอร์
+ลำดับที่ 2: พัฒนา Branch Admin Batching Map: สร้างหน้า /branch-admin/batching/page.tsx ดึงข้อมูลตาราง orders มาแสดงบนแผนที่ Leaflet เพื่อให้ Branch Admin กดลากเลือกออเดอร์ และกดบันทึกลงตาราง delivery_batches และ batch_items
+ลำดับที่ 3: เชื่อมต่อ Route Optimization API: สร้าง Next.js Route Handler (/api/optimize-route) ที่จะรับข้อมูลจากข้อ 2 ไปเรียงลำดับ Sequence ผ่าน Google Maps API แล้วอัปเดตกลับลงตาราง batch_items
+5. Error Prevention (จุดเสี่ยงในโค้ดปัจจุบันที่ต้องแก้ไข)
+ก่อนที่จะเดินหน้าพัฒนาในเฟสถัดไป ผมพบจุดเสี่ยงที่อาจทำให้เกิดบั๊กในอนาคต แนะนำให้รีบแก้ไขครับ:
+
+TypeScript Types any (ความเสี่ยงปานกลาง): ในไฟล์ src/app/(customer)/[branchId]/page.tsx มีการใช้ item: any ตอน Map ข้อมูลสินค้า const products = inventory?.map((item: any) => ...) แนะนำให้รันคำสั่ง npx supabase gen types typescript เพื่อนำ Type มาครอบ ป้องกันการพิมพ์ชื่อฟิลด์ผิดในอนาคต
+Data Types Mismatch (ความเสี่ยงต่ำ-ปานกลาง):
+ใน Checkout/page.tsx ตอนบันทึก price_at_purchase มีการใช้ String(item.price) เนื่องจากใน Database ออกแบบไว้เป็น character varying (ตามไฟล์ sql.txt) ซึ่งอาจทำให้คำนวณยอดขายรวมได้ยากในอนาคต (ถ้าเป็นไปได้ ควร Alter Table ให้เป็น numeric ครับ)
+Row Level Security (RLS) (ความเสี่ยงสูงสุดเรื่อง Security): ปัจจุบันโค้ดมีการ Select และ Insert ข้อมูลลง Supabase โดยตรง หากยังไม่ได้เปิดใช้งาน RLS (Row Level Security) บน Supabase Dashboard สาขา A อาจจะสามารถดึงข้อมูลออเดอร์ของสาขา B มาดูได้ คุณต้องเขียน Policy แยกสิทธิ์ตาม branch_id ให้เรียบร้อยครับ
+สรุป: โค้ดโครงสร้างปูมาได้ยอดเยี่ยมมากครับ พร้อมลุยเฟสที่ 2 คือฝั่ง Branch Admin Batching Map ได้เลยทันทีครับ!

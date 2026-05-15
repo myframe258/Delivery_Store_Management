@@ -24,6 +24,7 @@ export default function CheckoutPage() {
   const { activeBranchId } = useBranchStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // State สำหรับเก็บข้อมูลลูกค้า
   const [formData, setFormData] = useState({
@@ -43,7 +44,7 @@ export default function CheckoutPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง และดักจับ Auth (ถ้ายังไม่ Login ให้ไปหน้า Login)
+  // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง และตรวจสอบสถานะ Auth แบบเงียบๆ
   useEffect(() => {
     if (items.length === 0) {
       router.push('/');
@@ -51,13 +52,10 @@ export default function CheckoutPage() {
     }
 
     const checkAuth = async () => {
+      setIsAuthChecking(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        alert('กรุณาเข้าสู่ระบบก่อนดำเนินการชำระเงิน');
-        router.push('/login?returnTo=/checkout');
-      } else {
-        setUser(session.user);
-      }
+      setUser(session?.user || null);
+      setIsAuthChecking(false);
     };
     checkAuth();
   }, [items, router, supabase.auth]);
@@ -189,14 +187,25 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              form="checkout-form"
-              disabled={isSubmitting}
-              className="w-full bg-slate-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-slate-700 transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
-            >
-              {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}
-            </button>
+            {/* ตรวจสอบเงื่อนไขเพื่อแสดงปุ่ม Login หรือ ปุ่มยืนยันการสั่งซื้อ */}
+            {isAuthChecking ? (
+              <button type="button" disabled className="w-full bg-gray-100 text-gray-400 py-3 px-4 rounded-xl font-medium flex justify-center items-center cursor-not-allowed">
+                กำลังตรวจสอบสิทธิ์...
+              </button>
+            ) : !user ? (
+              <Link href="/login?returnTo=/checkout" className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 transition shadow-sm flex justify-center items-center">
+                เข้าสู่ระบบเพื่อยืนยันการสั่งซื้อ
+              </Link>
+            ) : (
+              <button
+                type="submit"
+                form="checkout-form"
+                disabled={isSubmitting}
+                className="w-full bg-slate-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-slate-700 transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
+              >
+                {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}
+              </button>
+            )}
           </div>
         </div>
 

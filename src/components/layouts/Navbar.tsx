@@ -2,19 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useCartStore } from '@/store/cartStore';
-import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin } from 'lucide-react';
+import { useBranchStore } from '@/store/branchStore';
+import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   
-  // ดึงจำนวนสินค้าจาก Cart Store
+  // Zustand Stores
   const items = useCartStore((state) => state.items);
   const cartItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
+  const activeBranchId = useBranchStore((state) => state.activeBranchId);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,6 +26,8 @@ export default function Navbar() {
   );
 
   useEffect(() => {
+    setIsMounted(true); // ป้องกัน Hydration Mismatch จาก LocalStorage
+    
     // 1. ตรวจสอบ Session ตอนโหลดครั้งแรก
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();

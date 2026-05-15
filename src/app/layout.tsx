@@ -17,7 +17,8 @@ export default function RootLayout({
     <html lang="th">
       <body>
         <Navbar />
-        <div className="pt-16">{children}</div>
+        {/* ปรับ Padding สำหรับ Desktop (pt-16) และ Mobile (pt-14 บน, pb-16 ล่าง) เพื่อไม่ให้เนื้อหาถูกเมนูบัง */}
+        <div className="pt-14 pb-16 md:pt-16 md:pb-0">{children}</div>
       </body>
     </html>
   );

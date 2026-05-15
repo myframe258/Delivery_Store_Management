@@ -77,7 +77,21 @@ export default function BatchingClient({ orders, branchId, branchLocation }: Bat
 
       if (updateError) throw new Error(updateError.message);
 
-      alert('สร้างรอบการจัดส่งสำเร็จ!');
+      // 4. เรียกใช้ API เพื่อคำนวณและจัดลำดับเส้นทาง (Route Optimization)
+      try {
+        const optimizeRes = await fetch('/api/optimize-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batch_id: batchData.id })
+        });
+        const optimizeData = await optimizeRes.json();
+        if (!optimizeRes.ok) throw new Error(optimizeData.error || 'คำนวณเส้นทางล้มเหลว');
+      } catch (optError: any) {
+        console.error('Optimization warning:', optError);
+        alert('สร้างรอบจัดส่งสำเร็จแล้ว แต่มีปัญหาในการคำนวณเส้นทางอัตโนมัติ: ' + optError.message);
+      }
+
+      alert('สร้างรอบการจัดส่งและจัดเรียงเส้นทางสำเร็จ!');
       setSelectedIds([]); // เคลียร์รายการที่เลือก
       router.refresh();   // ดึงข้อมูลใหม่จาก Server
 

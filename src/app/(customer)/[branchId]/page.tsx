@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AddToCartButton from '@/components/ui/AddToCartButton';
+import BranchGuard from '@/components/utilities/BranchGuard';
 
 export default async function BranchStorefrontPage({
   params,

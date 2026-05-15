@@ -25,22 +25,25 @@
 โครงสร้างฐานข้อมูลหลักออกแบบให้รองรับ Multi-branch ดังนี้:
 - `branches`: ข้อมูลสาขา (id, name, lat, lng, address)
 - `products`: ข้อมูลสินค้ากลาง (id, name, price, description, image_url)
-- `branch_inventory`: สต็อกสินค้าแยกตามสาขา (branch_id, product_id, stock)
+- `branch_inventory`: สต็อกสินค้าแยกตามสาขา (branch_id, product_id, stock_count, status)
 - `users`: ข้อมูลผู้ใช้งานและพนักงาน (id, role, branch_id)
-- `orders`: รายการสั่งซื้อของลูกค้า (customer_id, branch_id, total_price, lat, lng, status)
-- `order_items`: รายละเอียดสินค้าในออเดอร์ (order_id, product_id, quantity)
-- `delivery_batches`: รอบการจัดส่งของแต่ละสาขา (id, branch_id, driver_id, batch_status)
-- `batch_items`: ลำดับและจุดส่งในรอบ (batch_id, order_id, sequence_no)
+- `orders`: รายการสั่งซื้อของลูกค้า (customer_id, branch_id, total_price, lat, lng, status: 'pending'|'batched'|'delivered')
+- `order_items`: รายละเอียดสินค้าในออเดอร์ (order_id, product_id, quantity, price_at_purchase)
+- `delivery_batches`: รอบการจัดส่งของแต่ละสาขา (id, branch_id, driver_id, batch_status: 'pending'|'assigned'|'in_progress'|'completed')
+- `batch_items`: ลำดับและจุดส่งในรอบ (batch_id, order_id, sequence_no, delivery_status: 'pending'|'delivered')
 
 ---
 
 ## 4. Current Progress (สถานะปัจจุบัน)
 - **Setup & Infrastructure:** ตั้งค่าโปรเจกต์ Next.js + Tailwind v4 + Supabase SSR สมบูรณ์
-- **Routing & Auth:** ทำ Middleware ตรวจสอบ Role และทำ Redirect หน้า Dashboard เสร็จแล้ว
+- **Routing & Auth Logic:** ทำ Middleware ตรวจสอบ Role และสร้าง `Navbar.tsx` เสร็จสมบูรณ์ รองรับการเข้าชมเว็บแบบสาธารณะ สลับเมนูตาม Role อัตโนมัติ และบังคับ Login เฉพาะจังหวะที่ลูกค้ายืนยันการสั่งซื้อ (Checkout)
 - **Customer Storefront:**
   - สร้างหน้าค้นหาสาขา (Branch Locator) ที่ดึงพิกัดจากตาราง `branches` มาแสดงบนแผนที่ Leaflet 
   - ใช้ Zustand (`branchStore.ts`) บันทึก ID สาขาที่ลูกค้าเลือก
-  - สร้างหน้าสินค้าตามสาขา `/[branchId]/page.tsx` ดึงข้อมูล JOIN ระหว่าง `branch_inventory` กับ `products` เสร็จแล้ว
+  - สร้างหน้าสินค้าตามสาขา (`/[branchId]/page.tsx`), ระบบตะกร้า (`cartStore.ts`) ทำงานได้สมบูรณ์
+  - สร้างหน้า Checkout ให้ลูกค้าปักหมุดที่อยู่และบันทึกรายการลง Database (`orders`, `order_items`) ได้สำเร็จ
+- **Branch Admin Flow:** สร้างหน้าจัดรอบส่ง (`/branch-admin/batching`) ให้แอดมินสาขาดึงออเดอร์บนแผนที่ และเลือกรวมกลุ่มออเดอร์ (Batching) สร้างเป็นรอบจัดส่งลง Database ได้แล้ว
+- **Rider Flow:** สร้างหน้าแอปสำหรับคนขับ (`/rider/batches`) รองรับการดูคิวงานตามลำดับ `sequence_no` บนแผนที่, ฟีเจอร์กดปุ่มเพื่อนำทางผ่าน Google Maps App, และปุ่มกดเปลี่ยนสถานะส่งสำเร็จแบบ Real-time
 
 ---
 
@@ -52,11 +55,12 @@
   - เพิ่ม `key` ให้ `MapContainer` เพื่อให้ React รีเซ็ตแผนที่เมื่อข้อมูลเปลี่ยน
 - **String Lat/Lng:** ฐานข้อมูลส่งพิกัดมาเป็น String แก้ไขโดยใช้ `Number(lat)` ก่อนส่งให้แผนที่
 - **Tailwind CSS v4 Configuration:** แก้ปัญหา CSS ไม่โหลดโดยการอัปเดตไปใช้ `@tailwindcss/postcss` ใน `postcss.config.js` และใช้ `@import "tailwindcss";` แทน `@tailwind` directives แบบเก่า
+- **Mobile UI Layout Management:** ป้องกันปัญหาเนื้อหาโดน Navbar ด้านบน และ Bottom Navigation ในมือถือบัง โดยตั้งค่า SafeArea `pt-14` และ `pb-16` ไว้ใน `layout.tsx` ทำให้แสดงผล PWA ได้สมบูรณ์
+- **Draggable Map Pinning:** ทำระบบเลื่อนปักหมุด (Draggable Marker) ในหน้า Checkout โดยใช้ Event `dragend` ของ Leaflet ให้ลูกค้าเลื่อนหมุดเพื่อดึงพิกัดจัดส่งที่แม่นยำ 100%
 
 ---
 
 ## 6. Next Immediate Goals (สิ่งที่ต้องทำต่อไป)
-1. **Shopping Cart Store:** สร้าง Zustand Store (`cartStore.ts`) เพื่อให้ปุ่ม "เพิ่มลงตะกร้า" ในหน้า Storefront ทำงานได้
-2. **Checkout Page & Map Pinning:** สร้างหน้า Checkout ให้ลูกค้ากรอกข้อมูล ปักหมุดที่อยู่ลงบนแผนที่ Leaflet และบันทึก `lat`/`lng` พร้อมรายการสินค้าลงตาราง `orders`
-3. **Branch Admin Batching Map:** สร้างแดชบอร์ดให้ Branch Admin ดึงออเดอร์ค้างส่งมาแสดงบนแผนที่ เพื่อลากกรอบ (Lasso) สร้างรอบการจัดส่ง
-4. **Route Optimization Integration:** เชื่อมต่อ Google Maps API ฝั่ง Backend เพื่อรับข้อมูล Batch ไปคำนวณหาเส้นทางที่สั้นที่สุด
+1. **Route Optimization API:** สร้าง Route Handler (`/api/optimize-route`) เชื่อมต่อ Google Maps Directions API เพื่อจัดเรียงลำดับจุดส่งที่สั้นที่สุด (TSP) และอัปเดต `sequence_no` ให้ Rider อัตโนมัติ
+2. **Branch Inventory Management:** สร้างหน้าระบบหลังบ้าน (`/branch-admin/inventory`) ให้ผู้จัดการสาขาสามารถแก้ไข/จัดการจำนวนสต็อกและสถานะของสินค้าในสาขาตัวเอง
+3. **Type Safety & Security (RLS):** เปลี่ยนการใช้ Type `any` ด้วยการรัน Supabase Types Script และตั้งค่า Row Level Security (RLS) Policy เพื่อป้องกันการแอบแก้ไขข้อมูลข้ามสาขา

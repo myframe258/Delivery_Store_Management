@@ -101,8 +101,9 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
         
         {/* ตัวเลือกรอบบิล */}
         <div className="p-4 bg-white border-b border-gray-200">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">เลือกรอบการจัดส่ง</label>
-          <select 
+          <label htmlFor="batch-select" className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">เลือกรอบการจัดส่ง</label>
+          <select
+            id="batch-select"
             value={activeBatchId || ''} 
             onChange={(e) => setActiveBatchId(e.target.value)}
             className="w-full bg-slate-50 border border-gray-200 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"

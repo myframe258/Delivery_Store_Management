@@ -25,6 +25,10 @@ export async function middleware(request: NextRequest) {
   const role = user?.app_metadata?.role || user?.user_metadata?.role;
   const path = request.nextUrl.pathname;
 
+
+  
+
+
   // อนุญาตให้ผ่านได้เสมอสำหรับ API และไฟล์ Assets ต่างๆ
   if (path.startsWith('/api') || path.startsWith('/_next') || path.includes('.')) {
     return supabaseResponse;

@@ -50,6 +50,15 @@ export default function Navbar() {
     router.push('/');
   };
 
+  // ฟังก์ชันแปลชื่อ Role เป็นภาษาไทยให้แสดงผลสวยงาม
+  const getRoleDisplay = (r: string | null) => {
+    if (r === 'super_admin') return 'ผู้ดูแลระบบสูงสุด';
+    if (r === 'branch_admin') return 'ผู้จัดการสาขา';
+    if (r === 'rider') return 'พนักงานขับรถ';
+    if (r === 'customer') return 'ลูกค้า';
+    return 'ลูกค้าทั่วไป';
+  };
+
   return (
     <nav className="fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50 shadow-sm h-16 flex items-center">
       <div className="max-w-7xl mx-auto w-full px-4 md:px-8 flex justify-between items-center text-slate-800">
@@ -102,7 +111,10 @@ export default function Navbar() {
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-gray-100">
                 <User className="w-4 h-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">{user.email?.split('@')[0]}</span>
+                <div className="flex flex-col items-start justify-center">
+                  <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate leading-none">{user.email?.split('@')[0]}</span>
+                  <span className="text-[9px] font-bold text-blue-600 mt-1 leading-none">{getRoleDisplay(role)}</span>
+                </div>
               </div>
               <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full transition" title="ออกจากระบบ">
                 <LogOut className="w-5 h-5" />

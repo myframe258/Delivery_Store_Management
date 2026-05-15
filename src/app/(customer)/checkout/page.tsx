@@ -95,7 +95,7 @@ export default function CheckoutPage() {
         order_id: orderData.id,
         product_id: item.id,
         quantity: item.quantity,
-        price_at_purchase: String(item.price), // ตาม Database Schema กำหนดเป็น character varying
+        price_at_purchase: item.price, // ตาม Database Schema กำหนดเป็น character varying
       }));
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);

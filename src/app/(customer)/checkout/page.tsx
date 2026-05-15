@@ -23,6 +23,7 @@ export default function CheckoutPage() {
   const { items, getTotalPrice, clearCart } = useCartStore();
   const { activeBranchId } = useBranchStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   // State สำหรับเก็บข้อมูลลูกค้า
   const [formData, setFormData] = useState({
@@ -42,12 +43,24 @@ export default function CheckoutPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง
+  // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง และดักจับ Auth (ถ้ายังไม่ Login ให้ไปหน้า Login)
   useEffect(() => {
     if (items.length === 0) {
       router.push('/');
+      return;
     }
-  }, [items, router]);
+
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('กรุณาเข้าสู่ระบบก่อนดำเนินการชำระเงิน');
+        router.push('/login?returnTo=/checkout');
+      } else {
+        setUser(session.user);
+      }
+    };
+    checkAuth();
+  }, [items, router, supabase.auth]);
 
   // ฟังก์ชันอัปเดตแบบฟอร์ม
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -67,6 +80,7 @@ export default function CheckoutPage() {
         .from('orders')
         .insert({
           branch_id: Number(activeBranchId), // ตารางต้องการ bigint
+          customer_id: user?.id, // บันทึกไอดีลูกค้าลง Database
           total_price: getTotalPrice(),
           lat: location.lat,
           lng: location.lng,

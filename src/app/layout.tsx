@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import 'leaflet/dist/leaflet.css';
 import './globals.css';
+import Navbar from '@/components/layouts/Navbar';
 
 export const metadata: Metadata = {
   title: 'Batch Delivery Store Management',
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="th">
-      <body>{children}</body>
+      <body>
+        <Navbar />
+        <div className="pt-16">{children}</div>
+      </body>
     </html>
   );
 }

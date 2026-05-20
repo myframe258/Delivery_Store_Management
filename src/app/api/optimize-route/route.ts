@@ -1,78 +1,79 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+
+// ข้อมูลจำเพาะสำหรับ Request Body ที่คาดหวัง
+interface OrderLocation {
+  id: string; // Order ID
+  lat: number;
+  lng: number;
+  [key: string]: any; // ข้อมูลอื่นๆ ของออเดอร์
+}
+
+interface OptimizeRouteRequest {
+  branchLocation: { lat: number; lng: number };
+  orders: OrderLocation[];
+}
 
 export async function POST(request: Request) {
   try {
-    const { batch_id } = await request.json();
-    if (!batch_id) return NextResponse.json({ error: 'Missing batch_id' }, { status: 400 });
+    const body: OptimizeRouteRequest = await request.json();
+    const { branchLocation, orders } = body;
 
-    // 1. Initialize Supabase Client (ใช้ Service Role Key เพื่อ Bypass RLS กรณีรันจากฝั่ง Server)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // 2. ดึงข้อมูลพิกัดของสาขา (จุดเริ่มต้น)
-    const { data: batch, error: batchError } = await supabase
-      .from('delivery_batches')
-      .select('branch_id, branches(lat, lng)')
-      .eq('id', batch_id)
-      .single();
-
-    if (batchError || !batch) throw new Error('ไม่พบข้อมูลรอบจัดส่ง (Batch not found)');
-    
-    // แปลง String เป็น Number ป้องกันข้อผิดพลาด
-    const branchLat = Number(batch.branches.lat);
-    const branchLng = Number(batch.branches.lng);
-
-    // 3. ดึงข้อมูลพิกัดออเดอร์ทั้งหมดในรอบนี้ (จุดแวะส่ง)
-    const { data: items, error: itemsError } = await supabase
-      .from('batch_items')
-      .select('id, order_id, orders(lat, lng)')
-      .eq('batch_id', batch_id);
-
-    if (itemsError || !items || items.length === 0) throw new Error('ไม่พบรายการออเดอร์ในรอบจัดส่งนี้');
-
-    // หากมีแค่ 1 จุดส่ง ไม่ต้องเสียเวลาให้ Google Maps คำนวณ
-    if (items.length === 1) {
-      await supabase.from('batch_items').update({ sequence_no: 1 }).eq('id', items[0].id);
-      return NextResponse.json({ success: true, message: 'มีเพียง 1 จุดส่ง อัปเดตลำดับเรียบร้อย' });
+    // 1. ตรวจสอบข้อมูลนำเข้า
+    if (!branchLocation || !orders || !Array.isArray(orders) || orders.length === 0) {
+      return NextResponse.json(
+        { error: 'ข้อมูลไม่ครบถ้วน กรุณาส่งพิกัดสาขาและรายการออเดอร์' },
+        { status: 400 }
+      );
     }
 
-    // 4. เตรียมข้อมูลส่งเข้า Google Maps Directions API
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-    if (!apiKey) throw new Error('ยังไม่ได้ตั้งค่า GOOGLE_MAPS_API_KEY ใน .env.local');
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'ยังไม่ได้ตั้งค่า GOOGLE_MAPS_API_KEY ใน Environment Variables' },
+        { status: 500 }
+      );
+    }
 
-    const origin = `${branchLat},${branchLng}`;
-    const destination = origin; // กำหนดให้จุดสิ้นสุดกลับมาที่สาขา (Loop) เพื่อให้ Google จัดลำดับได้แม่นยำที่สุด
+    // 2. จัดเตรียมพารามิเตอร์สำหรับ Google Maps API
+    const origin = `${branchLocation.lat},${branchLocation.lng}`;
+    // ให้ปลายทางเป็นสาขา เพื่อให้รถวิ่งจบรอบที่ร้าน
+    const destination = origin; 
     
-    // กำหนด Waypoints พร้อมเปิดโหมด optimize:true
-    const waypoints = `optimize:true|` + items.map((item: any) => `${item.orders.lat},${item.orders.lng}`).join('|');
+    // แปลงพิกัดออเดอร์เป็น string และใส่คำสั่ง optimize:true เพื่อให้ AI ของ Google จัดเรียงลำดับให้
+    const waypointsArray = orders.map((o) => `${o.lat},${o.lng}`);
+    const waypointsParam = `optimize:true|${waypointsArray.join('|')}`;
 
-    const googleApiUrl = `<https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=${waypoints}&key=${apiKey}>`;
+    // 3. ยิง Request ไปยัง Google Maps Directions API
+    const url = new URL('https://maps.googleapis.com/maps/api/directions/json');
+    url.searchParams.append('origin', origin);
+    url.searchParams.append('destination', destination);
+    url.searchParams.append('waypoints', waypointsParam);
+    url.searchParams.append('key', apiKey);
 
-    const response = await fetch(googleApiUrl);
-    const data = await response.json();
+    const res = await fetch(url.toString());
+    const data = await res.json();
 
     if (data.status !== 'OK') {
-      throw new Error(`Google Maps API คำนวณเส้นทางไม่ได้: ${data.status}`);
+      return NextResponse.json({ error: 'Google Maps API error', details: data }, { status: 400 });
     }
 
-    // 5. นำลำดับที่ Google คำนวณได้ (waypoint_order) มาอัปเดตลง Database
-    const waypointOrder = data.routes[0].waypoint_order; // จะได้ Array เช่น [2, 0, 1]
+    // 4. นำผลลัพธ์ (waypoint_order) มาจัดเรียงลำดับออเดอร์ใหม่
+    const route = data.routes[0];
+    const optimizedOrderIndices: number[] = route.waypoint_order; // เช่น [2, 0, 1]
 
-    const updatePromises = waypointOrder.map((originalIndex: number, newSequence: number) => {
-      const batchItemId = items[originalIndex].id;
-      return supabase
-        .from('batch_items')
-        .update({ sequence_no: newSequence + 1 }) // +1 เพราะ Sequence ควรเริ่มที่ 1
-        .eq('id', batchItemId);
+    // สร้าง Array ออเดอร์ใหม่ที่ถูกเรียงลำดับแล้ว พร้อมแนบ sequence_no
+    const optimizedOrders = optimizedOrderIndices.map((originalIndex, newSequence) => ({
+      ...orders[originalIndex],
+      sequence_no: newSequence + 1, // เริ่มต้นที่ 1
+    }));
+
+    // 5. ส่งข้อมูลกลับไปยัง Client
+    return NextResponse.json({
+      success: true,
+      optimizedOrders
     });
-
-    await Promise.all(updatePromises);
-
-    return NextResponse.json({ success: true, message: 'คำนวณและอัปเดตเส้นทางสำเร็จ!' });
-  } catch (error: any) {
-    console.error('Route Optimization Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error('Optimize Route API Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

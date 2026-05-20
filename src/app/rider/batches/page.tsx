@@ -20,7 +20,7 @@ export default async function RiderBatchesPage() {
     return <div className="p-8 text-center text-red-500 font-medium">คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะคนขับเท่านั้น)</div>;
   }
 
-  // 3. ดึง Delivery Batches ของสาขานี้ ที่ยังไม่เสร็จสมบูรณ์
+  // 3. ดึง Delivery Batches เฉพาะงานที่ Assign ให้คนขับคนนี้ และยังวิ่งไม่เสร็จ
   const { data: batches } = await supabase
     .from('delivery_batches')
     .select(`
@@ -42,7 +42,8 @@ export default async function RiderBatchesPage() {
       )
     `)
     .eq('branch_id', userData.branch_id)
-    .in('batch_status', ['pending', 'assigned', 'in_progress']) // ดึงรอบที่แอดมินเพิ่งสร้างมาแสดงด้วยเพื่อการเทส MVP
+    .eq('driver_id', user.id) // <--- เพิ่มตัวกรองให้ดึงเฉพาะงานของ Rider คนปัจจุบัน
+    .in('batch_status', ['assigned', 'in_progress']) // <--- เอา pending ออก เพราะยังไม่มีคนรับงาน
     .order('created_at', { ascending: false });
 
   return (

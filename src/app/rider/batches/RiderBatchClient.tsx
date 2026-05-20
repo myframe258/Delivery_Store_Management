@@ -42,20 +42,45 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
         .eq('id', batchItemId);
       if (batchItemError) throw batchItemError;
 
-      // 3. อัปเดต State บนหน้าจอโดยไม่ต้องรีเฟรช
-      setBatches((prev) => prev.map((batch) => {
-        if (batch.id === activeBatchId) {
-          return {
-            ...batch,
-            batch_items: batch.batch_items.map((item: any) => 
-              item.id === batchItemId ? { ...item, delivery_status: 'delivered', orders: { ...item.orders, status: 'delivered' } } : item
-            )
-          };
-        }
-        return batch;
-      }));
+      // 3. ตรวจสอบว่าเป็นการส่งชิ้นสุดท้ายเพื่อปิดรอบบิล (Completed) หรือไม่
+      const currentBatch = batches.find(b => b.id === activeBatchId);
+      let alertMessage = 'อัปเดตสถานะสำเร็จ!';
+      
+      if (currentBatch) {
+        const isLastItem = currentBatch.batch_items.every((item: any) => 
+          item.id === batchItemId || item.delivery_status === 'delivered'
+        );
 
-      alert('อัปเดตสถานะสำเร็จ!');
+        if (isLastItem) {
+          await supabase.from('delivery_batches').update({ batch_status: 'completed' }).eq('id', activeBatchId);
+          alertMessage = 'ส่งสินค้าครบทุกจุดแล้ว ปิดรอบการจัดส่งนี้อัตโนมัติ!';
+        } else if (currentBatch.batch_status !== 'in_progress') {
+          // เปลี่ยนสถานะรอบส่งเป็น in_progress เมื่อเริ่มส่งจุดแรก
+          await supabase.from('delivery_batches').update({ batch_status: 'in_progress' }).eq('id', activeBatchId);
+        }
+      }
+
+      // 4. อัปเดต State บนหน้าจอ
+      setBatches((prev) => {
+        const updatedBatches = prev.map((batch) => {
+          if (batch.id === activeBatchId) {
+            const updatedItems = batch.batch_items.map((item: any) => 
+              item.id === batchItemId ? { ...item, delivery_status: 'delivered', orders: { ...item.orders, status: 'delivered' } } : item
+            );
+            const isLastItem = updatedItems.every((item: any) => item.delivery_status === 'delivered');
+            return { ...batch, batch_status: isLastItem ? 'completed' : 'in_progress', batch_items: updatedItems };
+          }
+          return batch;
+        }).filter(batch => batch.batch_status !== 'completed'); // เอารอบที่เสร็จแล้วออกจากหน้าจอ
+
+        // ถ้ารอบนี้ส่งเสร็จจนหายไปจากหน้าจอ ให้เลือกคิวถัดไปอัตโนมัติ
+        if (updatedBatches.every(b => b.id !== activeBatchId)) {
+          setTimeout(() => setActiveBatchId(updatedBatches[0]?.id || null), 0);
+        }
+        return updatedBatches;
+      });
+
+      alert(alertMessage);
     } catch (error: any) {
       alert('เกิดข้อผิดพลาด: ' + error.message);
     } finally {

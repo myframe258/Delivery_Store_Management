@@ -73,6 +73,20 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-6 font-medium text-sm">
           <Link href="/" className="hover:text-blue-600 transition">หน้าหลัก (ค้นหาสาขา)</Link>
           
+          {role === 'super_admin' && (
+            <>
+              <Link href="/super-admin/branches" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <Store className="w-4 h-4" /> จัดการสาขา
+              </Link>
+              <Link href="/super-admin/products" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <Package className="w-4 h-4" /> จัดการสินค้า
+              </Link>
+              <Link href="/super-admin/users" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <User className="w-4 h-4" /> จัดการสิทธิ์
+              </Link>
+            </>
+          )}
+
           {role === 'branch_admin' && (
             <>
               <Link href="/branch-admin/inventory" className="flex items-center gap-1 hover:text-blue-600 transition">
@@ -87,6 +101,12 @@ export default function Navbar() {
           {role === 'rider' && (
             <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
               <Truck className="w-4 h-4" /> งานส่งของ
+            </Link>
+          )}
+
+          {(role === 'customer' || !role) && (
+            <Link href="/orders" className="flex items-center gap-1 hover:text-blue-600 transition">
+              <Package className="w-4 h-4" /> การสั่งซื้อของฉัน
             </Link>
           )}
         </div>

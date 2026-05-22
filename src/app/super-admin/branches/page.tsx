@@ -178,10 +178,10 @@ export default function SuperAdminBranchesPage() {
               <div className="flex justify-between items-start mb-4">
                 <h2 className="text-xl font-bold text-gray-800 line-clamp-1">{branch.name}</h2>
                 <div className="flex gap-2">
-                  <button onClick={() => openModal(branch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                  <button onClick={() => openModal(branch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสาขา">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(branch.id, branch.name)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <button onClick={() => handleDelete(branch.id, branch.name)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบสาขา">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -215,7 +215,7 @@ export default function SuperAdminBranchesPage() {
               <h2 className="text-xl font-bold text-gray-800">
                 {editingId ? 'แก้ไขข้อมูลสาขา' : 'เพิ่มสาขาใหม่'}
               </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200 transition-colors">
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200 transition-colors" title="ปิดหน้าต่าง">
                 <X className="w-6 h-6" />
               </button>
             </div>

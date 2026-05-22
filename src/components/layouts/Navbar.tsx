@@ -14,7 +14,7 @@ export default function Navbar() {
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  
+
   // Zustand Stores
   const items = useCartStore((state) => state.items);
   const cartItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
@@ -27,7 +27,7 @@ export default function Navbar() {
 
   useEffect(() => {
     setIsMounted(true); // ป้องกัน Hydration Mismatch จาก LocalStorage
-    
+
     // 1. ตรวจสอบ Session ตอนโหลดครั้งแรก
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -62,7 +62,7 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50 shadow-sm h-16 flex items-center">
       <div className="max-w-7xl mx-auto w-full px-4 md:px-8 flex justify-between items-center text-slate-800">
-        
+
         {/* Logo / หน้าหลัก */}
         <Link href="/" className="flex items-center gap-2 font-bold text-xl text-blue-600 hover:opacity-80 transition">
           <MapPin className="w-6 h-6" />
@@ -72,7 +72,7 @@ export default function Navbar() {
         {/* เมนูตรงกลาง (แสดงตาม Role) */}
         <div className="hidden md:flex items-center gap-6 font-medium text-sm">
           <Link href="/" className="hover:text-blue-600 transition">หน้าหลัก (ค้นหาสาขา)</Link>
-          
+
           {role === 'super_admin' && (
             <>
               <Link href="/super-admin/branches" className="flex items-center gap-1 hover:text-blue-600 transition">
@@ -83,6 +83,9 @@ export default function Navbar() {
               </Link>
               <Link href="/super-admin/users" className="flex items-center gap-1 hover:text-blue-600 transition">
                 <User className="w-4 h-4" /> จัดการสิทธิ์
+              </Link>
+              <Link href="/super-admin/categories" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <MapIcon className="w-4 h-4" /> จัดการหมวดหมู่
               </Link>
             </>
           )}
@@ -97,7 +100,7 @@ export default function Navbar() {
               </Link>
             </>
           )}
-          
+
           {role === 'rider' && (
             <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
               <Truck className="w-4 h-4" /> งานส่งของ
@@ -113,7 +116,7 @@ export default function Navbar() {
 
         {/* ส่วนขวา (ตะกร้า และ Auth) */}
         <div className="flex items-center gap-4">
-          
+
           {/* ตะกร้าสินค้า */}
           <Link href="/checkout" className="relative p-2 hover:bg-slate-50 rounded-full transition">
             <ShoppingCart className="w-6 h-6 text-slate-700" />

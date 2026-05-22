@@ -442,7 +442,9 @@ export default function SuperAdminProductsPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h2 className="text-xl font-bold text-gray-800">{editingId ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้าใหม่'}</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200"><X className="w-6 h-6" /></button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200" title="ปิดหน้าต่าง">
+                <X className="w-6 h-6" />
+              </button>
             </div>
             
             <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-grow flex flex-col gap-4">
@@ -451,8 +453,8 @@ export default function SuperAdminProductsPage() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label><input required type="number" step="0.01" min="0" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น 15.50" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">URL รูปภาพสินค้า</label><input type="url" value={formData.image_url} onChange={(e) => setFormData({...formData, image_url: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://example.com/image.jpg" /></div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่สินค้า</label>
-                <select value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่สินค้า</label>
+                <select id="category_id" title="เลือกหมวดหมู่สินค้า" value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                   <option value="">-- ไม่ระบุหมวดหมู่ --</option>
                   {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                 </select>
@@ -476,7 +478,7 @@ export default function SuperAdminProductsPage() {
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FileSpreadsheet className="w-6 h-6 text-emerald-600" /> นำเข้าข้อมูลสินค้าด้วย Excel</h2>
                 <p className="text-sm text-gray-500 mt-1">อัปโหลดไฟล์ข้อมูลสินค้าและสต็อกเพื่อนำเข้าพร้อมกันหลายรายการ</p>
               </div>
-              <button onClick={closeImportModal} disabled={isImporting} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-200 transition-colors"><X className="w-6 h-6" /></button>
+              <button onClick={closeImportModal} disabled={isImporting} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-200 transition-colors" title="ปิดหน้าต่าง"><X className="w-6 h-6" /></button>
             </div>
             
             <div className="p-6 flex flex-col gap-6">

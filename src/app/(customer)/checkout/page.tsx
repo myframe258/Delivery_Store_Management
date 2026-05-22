@@ -6,6 +6,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
 import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
+import { Plus, Minus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
@@ -18,9 +19,26 @@ const CheckoutMap = dynamic(() => import('@/components/maps/CheckoutMap'), {
   ),
 });
 
+// สูตร Haversine Formula สำหรับหาระยะห่างระหว่างพิกัด (ส่งค่ากลับมาเป็นกิโลเมตร)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // รัศมีโลกหน่วยเป็นกิโลเมตร
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, getTotalPrice, clearCart } = useCartStore();
+  const items = useCartStore((state) => state.items);
+  const getTotalPrice = useCartStore((state) => state.getTotalPrice);
+  const clearCart = useCartStore((state) => state.clearCart);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
   const { activeBranchId } = useBranchStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false); // เพิ่ม State เช็คว่าสั่งซื้อสำเร็จหรือยัง
@@ -40,6 +58,11 @@ export default function CheckoutPage() {
     lng: 100.5018,
   });
   const [isLocating, setIsLocating] = useState(true);
+
+  const [branchData, setBranchData] = useState<any>(null);
+  const [distanceKm, setDistanceKm] = useState<number | null>(null);
+  const [deliveryFee, setDeliveryFee] = useState<number>(0);
+  const [isCalculatingFee, setIsCalculatingFee] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -81,6 +104,62 @@ export default function CheckoutPage() {
     }
   }, []);
 
+  // ดึงข้อมูลสาขาเพื่อเอารัศมีและพิกัด
+  useEffect(() => {
+    const fetchBranch = async () => {
+      if (!activeBranchId) return;
+      const { data } = await supabase
+        .from('branches')
+        .select('lat, lng, service_radius')
+        .eq('id', activeBranchId)
+        .single();
+      if (data) setBranchData(data);
+    };
+    fetchBranch();
+  }, [activeBranchId, supabase]);
+
+  // คำนวณระยะทางเมื่อพิกัดจัดส่งหรือข้อมูลสาขาเปลี่ยน
+  useEffect(() => {
+    if (branchData?.lat && branchData?.lng && location) {
+      const dist = calculateDistance(Number(branchData.lat), Number(branchData.lng), location.lat, location.lng);
+      setDistanceKm(dist);
+    }
+  }, [branchData, location]);
+
+  const serviceRadius = branchData?.service_radius || 15;
+  const isWithinRadius = distanceKm !== null && distanceKm <= serviceRadius;
+
+  // เรียกใช้ API เพื่อคำนวณค่าจัดส่งเมื่อระยะทางเปลี่ยน
+  useEffect(() => {
+    const fetchDeliveryFee = async () => {
+      if (distanceKm !== null && isWithinRadius) {
+        setIsCalculatingFee(true);
+        try {
+          const res = await fetch('/api/calculate-fee', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ distance: distanceKm }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setDeliveryFee(data.fee);
+          } else {
+            // Fallback กรณี API มีปัญหา: คิดกิโลเมตรละ 10 บาท
+            setDeliveryFee(Math.ceil(distanceKm * 10));
+          }
+        } catch (error) {
+          console.error('Error fetching delivery fee:', error);
+          setDeliveryFee(Math.ceil(distanceKm * 10));
+        } finally {
+          setIsCalculatingFee(false);
+        }
+      } else {
+        setDeliveryFee(0);
+      }
+    };
+    fetchDeliveryFee();
+  }, [distanceKm, isWithinRadius]);
+
   // ฟังก์ชันอัปเดตแบบฟอร์ม
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -90,6 +169,7 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeBranchId) return alert('ไม่พบข้อมูลสาขา กรุณาเลือกสาขาใหม่');
+    if (distanceKm !== null && !isWithinRadius) return alert('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
 
     setIsSubmitting(true);
 
@@ -100,10 +180,10 @@ export default function CheckoutPage() {
         .insert({
           branch_id: Number(activeBranchId), // ตารางต้องการ bigint
           customer_id: user?.id, // บันทึกไอดีลูกค้าลง Database
-          total_price: getTotalPrice(),
+            total_price: getTotalPrice() + deliveryFee,
           lat: location.lat,
           lng: location.lng,
-          customer_info: formData, // เก็บเป็น JSONB ตามโครงสร้าง Database
+            customer_info: { ...formData, delivery_fee: deliveryFee, distance_km: distanceKm }, // เก็บเป็น JSONB ตามโครงสร้าง Database
           status: 'pending',
         })
         .select('id')
@@ -180,6 +260,28 @@ export default function CheckoutPage() {
                 />
               )}
             </div>
+
+            {/* กล่องแจ้งเตือนระยะทาง */}
+            {distanceKm !== null && (
+              !isWithinRadius ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-3 items-start mt-4">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-bold text-red-800 text-sm">อยู่นอกพื้นที่ให้บริการ</h3>
+                    <p className="text-red-600 text-xs mt-1">
+                      ระยะทาง {distanceKm.toFixed(2)} กม. (รัศมีบริการ {serviceRadius} กม.)
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-3 items-center mt-4">
+                  <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                  <p className="text-green-800 text-sm font-medium">
+                    สามารถจัดส่งได้ (ระยะทาง: {distanceKm.toFixed(2)} กม.)
+                  </p>
+                </div>
+              )
+            )}
           </div>
         </div>
 
@@ -190,13 +292,30 @@ export default function CheckoutPage() {
             
             <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
               {items.map((item) => (
-                <div key={item.id} className="flex justify-between items-start border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex-1 pr-4">
-                    <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1">฿{item.price.toLocaleString()} x {item.quantity}</p>
+                <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 pr-4">
+                      <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
+                      <div className="text-sm font-semibold text-blue-600 mt-1">฿{item.price.toLocaleString()}</div>
+                    </div>
+                    <div className="font-semibold text-gray-800">
+                      ฿{(item.price * item.quantity).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="font-semibold text-gray-800">
-                    ฿{(item.price * item.quantity).toLocaleString()}
+                  {/* ส่วนควบคุมจำนวนสินค้า */}
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 w-fit">
+                      <button type="button" title="ลดจำนวน" onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-6 text-center font-semibold text-sm">{item.quantity}</span>
+                      <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium">
+                      <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">ลบ</span>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -208,12 +327,12 @@ export default function CheckoutPage() {
                 <span>฿{getTotalPrice().toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>ค่าจัดส่ง (คำนวณภายหลัง)</span>
-                <span>฿0</span>
+              <span>ค่าจัดส่ง (ระยะทาง {distanceKm !== null ? distanceKm.toFixed(1) : 0} กม.)</span>
+              <span>{isCalculatingFee ? 'กำลังคำนวณ...' : `฿${deliveryFee.toLocaleString()}`}</span>
               </div>
               <div className="flex justify-between text-xl font-bold text-blue-600 pt-2 border-t border-gray-200">
                 <span>ยอดรวมทั้งสิ้น</span>
-                <span>฿{getTotalPrice().toLocaleString()}</span>
+              <span>฿{(getTotalPrice() + deliveryFee).toLocaleString()}</span>
               </div>
             </div>
 
@@ -230,8 +349,10 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 form="checkout-form"
-                disabled={isSubmitting}
-                className="w-full bg-slate-800 text-white py-3 px-4 rounded-xl font-medium hover:bg-slate-700 transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
+              disabled={isSubmitting || (distanceKm !== null && !isWithinRadius) || isCalculatingFee}
+              className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${
+                (distanceKm !== null && !isWithinRadius) || isCalculatingFee ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
+                }`}
               >
                 {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}
               </button>

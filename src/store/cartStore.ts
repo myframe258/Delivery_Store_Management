@@ -5,17 +5,23 @@ export interface CartItem {
   id: string;
   name: string;
   price: number;
-  quantity: number;
   image_url?: string;
-  branch_id: string; // เก็บว่าสินค้านี้มาจากสาขาไหน
+  quantity: number;
+  branchId: string;
 }
 
 interface CartState {
   items: CartItem[];
+  activeBranchId: string | null;
+  
+  // Actions
   addItem: (item: CartItem) => void;
-  removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
+  removeItem: (id: string) => void;
   clearCart: () => void;
+  
+  // Getters (Helper functions)
+  getTotalItems: () => number;
   getTotalPrice: () => number;
 }
 
@@ -23,44 +29,63 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      
-      // เพิ่มสินค้าลงตะกร้า (ถ้ามีอยู่แล้วให้บวกจำนวนเพิ่ม)
+      activeBranchId: null,
+
       addItem: (item) => {
-        const { items } = get();
+        const { items, activeBranchId } = get();
+
+        // ตรวจสอบว่ามีสินค้าจากสาขาอื่นค้างอยู่ในตะกร้าหรือไม่
+        if (activeBranchId && activeBranchId !== item.branchId) {
+          if (window.confirm('คุณกำลังเลือกสินค้าจากสาขาอื่น ตะกร้าสินค้าเดิมของคุณจะถูกล้าง ต้องการดำเนินการต่อหรือไม่?')) {
+            // ล้างของเก่าและใส่ของใหม่เข้าไปแทน
+            set({ items: [item], activeBranchId: item.branchId });
+          }
+          return;
+        }
+
         const existingItem = items.find((i) => i.id === item.id);
         if (existingItem) {
           set({
-            items: items.map((i) =>
-              i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i
-            ),
+            items: items.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i)),
+            activeBranchId: item.branchId,
           });
         } else {
-          set({ items: [...items, item] });
+          set({
+            items: [...items, item],
+            activeBranchId: item.branchId,
+          });
         }
       },
 
-      // ลบสินค้าออกจากตะกร้า
-      removeItem: (id) => {
-        set({ items: get().items.filter((i) => i.id !== id) });
+      updateQuantity: (id, quantity) => {
+        if (quantity <= 0) {
+          get().removeItem(id);
+          return;
+        }
+        set((state) => ({
+          items: state.items.map((item) => (item.id === id ? { ...item, quantity } : item)),
+        }));
       },
 
-      // อัปเดตจำนวนสินค้า
-      updateQuantity: (id, quantity) => {
-        set({
-          items: get().items.map((i) =>
-            i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i
-          ),
+      removeItem: (id) => {
+        set((state) => {
+          const newItems = state.items.filter((item) => item.id !== id);
+          // ถ้าลบสินค้าชิ้นสุดท้ายออก ให้ปลดล็อกสาขาด้วย (จะได้ไปซื้อสาขาอื่นได้)
+          return {
+            items: newItems,
+            activeBranchId: newItems.length === 0 ? null : state.activeBranchId,
+          };
         });
       },
 
-      // เคลียร์ตะกร้าทั้งหมด
-      clearCart: () => set({ items: [] }),
+      clearCart: () => set({ items: [], activeBranchId: null }),
 
-      // คำนวณราคารวมทั้งหมด
+      getTotalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
+      
       getTotalPrice: () => get().items.reduce((total, item) => total + item.price * item.quantity, 0),
     }),
     {
-      name: 'cart-storage', // บันทึกข้อมูลลง LocalStorage
+      name: 'cart-storage', // ชื่อ Key ที่จะถูกเซฟลง localStorage ของเบราว์เซอร์
     }
   )
 );

@@ -39,6 +39,7 @@ export default function CheckoutPage() {
     lat: 13.7563,
     lng: 100.5018,
   });
+  const [isLocating, setIsLocating] = useState(true);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,6 +61,25 @@ export default function CheckoutPage() {
     };
     checkAuth();
   }, [items, router, supabase.auth, isSuccess]); // อย่าลืมใส่ isSuccess ใน Dependency Array
+
+  // ดึงตำแหน่งปัจจุบันของลูกค้า
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+          setIsLocating(false);
+        },
+        (error) => {
+          console.warn('Geolocation ถูกปฏิเสธหรือไม่สามารถใช้งานได้', error);
+          setIsLocating(false); // ถ้าปฏิเสธ ให้ใช้ค่าเริ่มต้นแทน
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      setIsLocating(false);
+    }
+  }, []);
 
   // ฟังก์ชันอัปเดตแบบฟอร์ม
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -148,10 +168,18 @@ export default function CheckoutPage() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-2">ปักหมุดตำแหน่งจัดส่ง</h2>
             <p className="text-sm text-gray-500 mb-6">เลื่อนหมุดสีน้ำเงินไปยังตำแหน่งที่ต้องการให้พนักงานไปส่งสินค้า</p>
-            <CheckoutMap 
-              initialPosition={[location.lat, location.lng]} 
-              onLocationChange={(lat, lng) => setLocation({ lat, lng })} 
-            />
+            <div className="relative min-h-[350px]">
+              {isLocating ? (
+                <div className="absolute inset-0 z-10 bg-slate-50 flex items-center justify-center rounded-xl border border-gray-100">
+                  <p className="text-blue-600 font-medium animate-pulse">📍 กำลังค้นหาตำแหน่งปัจจุบันของคุณ...</p>
+                </div>
+              ) : (
+                <CheckoutMap 
+                  initialPosition={[location.lat, location.lng]} 
+                  onLocationChange={(lat, lng) => setLocation({ lat, lng })} 
+                />
+              )}
+            </div>
           </div>
         </div>
 

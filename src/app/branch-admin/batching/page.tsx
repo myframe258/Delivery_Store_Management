@@ -115,24 +115,7 @@ export default function BatchingPage() {
     try {
       const selectedOrders = orders.filter((o) => selectedOrderIds.includes(o.id));
       
-      // 1. ส่งข้อมูลไปให้ API จัดเรียงเส้นทางที่สั้นที่สุด
-      const res = await fetch('/api/optimize-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          branchLocation: { lat: branch.lat, lng: branch.lng },
-          orders: selectedOrders,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'ไม่สามารถคำนวณเส้นทางได้');
-      }
-
-      const { optimizedOrders } = data;
-
-      // 2. สร้างรอบจัดส่ง (Delivery Batch) ใหม่
+      // 1. สร้างรอบจัดส่ง (Delivery Batch) ใหม่
       const { data: batchData, error: batchError } = await supabase
         .from('delivery_batches')
         .insert({
@@ -145,11 +128,11 @@ export default function BatchingPage() {
 
       if (batchError) throw batchError;
 
-      // 3. นำออเดอร์ที่ถูกจัดเรียงแล้ว (มี sequence_no) บันทึกลง batch_items
-      const batchItems = optimizedOrders.map((order: any) => ({
+      // 2. นำออเดอร์ที่เลือกลง batch_items เบื้องต้น
+      const batchItems = selectedOrders.map((order: any, index: number) => ({
         batch_id: batchData.id,
         order_id: order.id,
-        sequence_no: order.sequence_no,
+        sequence_no: index + 1,
         delivery_status: 'pending'
       }));
 
@@ -159,7 +142,7 @@ export default function BatchingPage() {
 
       if (itemsError) throw itemsError;
 
-      // 4. อัปเดตสถานะออเดอร์เป็น 'batched' เพื่อไม่ให้แสดงซ้ำในการจัดรอบครั้งต่อไป
+      // 3. อัปเดตสถานะออเดอร์เป็น 'batched' เพื่อไม่ให้แสดงซ้ำในการจัดรอบครั้งต่อไป
       const { error: updateOrdersError } = await supabase
         .from('orders')
         .update({ status: 'batched' })
@@ -167,7 +150,24 @@ export default function BatchingPage() {
 
       if (updateOrdersError) throw updateOrdersError;
 
-      alert('จัดรอบการส่งเรียบร้อยแล้ว เส้นทางถูกปรับให้สั้นที่สุด!');
+      // 4. ส่งข้อมูลไปให้ API จัดเรียงเส้นทางที่สั้นที่สุดพร้อม batchId
+      const res = await fetch('/api/optimize-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId: batchData.id,
+          branchLocation: { lat: branch.lat, lng: branch.lng },
+          orders: selectedOrders,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert('สร้างรอบส่งสำเร็จ แต่ไม่สามารถคำนวณเส้นทางอัตโนมัติได้: ' + (data.error || ''));
+      } else {
+        alert('จัดรอบการส่งเรียบร้อยแล้ว เส้นทางถูกปรับให้สั้นที่สุด!');
+      }
+
       setSelectedOrderIds([]);
       setSelectedRiderId('');
       fetchData(); // รีเฟรชข้อมูลบนหน้าจอใหม่

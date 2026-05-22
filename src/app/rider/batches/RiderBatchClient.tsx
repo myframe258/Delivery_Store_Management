@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
 import { MapPin, Navigation, CheckCircle, Package } from 'lucide-react';
@@ -19,6 +19,18 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  // อัปเดต State อัตโนมัติเมื่อมีการโหลดข้อมูลใหม่จาก Server
+  useEffect(() => {
+    setBatches(initialBatches);
+    setActiveBatchId(prevId => {
+      // ถ้ารอบบิลปัจจุบันถูกลบไปแล้ว หรือยังไม่ได้เลือก ให้สลับไปเลือกรอบแรกสุด
+      if (!prevId || !initialBatches.find(b => b.id === prevId)) {
+        return initialBatches[0]?.id || null;
+      }
+      return prevId;
+    });
+  }, [initialBatches]);
 
   const activeBatch = batches.find((b) => b.id === activeBatchId);
 
@@ -90,7 +102,7 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
 
   // ฟังก์ชันเปิด Google Maps
   const openGoogleMaps = (lat: number, lng: number) => {
-    const url = `<https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}>`;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
     window.open(url, '_blank');
   };
 
@@ -105,12 +117,12 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
 
   // เตรียมข้อมูล Marker สำหรับแผนที่
   const mapOrders = activeBatch?.batch_items.map((item: any) => ({
-    id: item.orders.id,
-    lat: item.orders.lat,
-    lng: item.orders.lng,
+    id: item.orders?.id || item.id,
+    lat: item.orders?.lat || 0,
+    lng: item.orders?.lng || 0,
     sequence_no: item.sequence_no,
     isDelivered: item.delivery_status === 'delivered',
-    customerName: item.orders.customer_info?.name || 'ลูกค้า',
+    customerName: item.orders?.customer_info?.name || 'ลูกค้า',
   })) || [];
 
   return (
@@ -154,19 +166,19 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
                       {item.sequence_no}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{item.orders.customer_info?.name}</h3>
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.orders.customer_info?.address}</p>
-                      <p className="text-xs font-medium text-blue-600 mt-1">เก็บเงิน: ฿{item.orders.total_price?.toLocaleString() || 0}</p>
+                      <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{item.orders?.customer_info?.name || 'ไม่ระบุชื่อ'}</h3>
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.orders?.customer_info?.address || 'ไม่ระบุที่อยู่'}</p>
+                      <p className="text-xs font-medium text-blue-600 mt-1">เก็บเงิน: ฿{item.orders?.total_price?.toLocaleString() || 0}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <button onClick={() => openGoogleMaps(item.orders.lat, item.orders.lng)} className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 text-blue-600 py-2 rounded-lg text-sm font-medium hover:bg-blue-100 transition">
+                  <button onClick={() => openGoogleMaps(item.orders?.lat || 0, item.orders?.lng || 0)} className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 text-blue-600 py-2 rounded-lg text-sm font-medium hover:bg-blue-100 transition">
                     <Navigation className="w-4 h-4" /> นำทาง
                   </button>
                   
-                  <button disabled={isDelivered || isUpdating} onClick={() => handleMarkDelivered(item.id, item.orders.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition ${isDelivered ? 'bg-green-500 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
+                  <button disabled={isDelivered || isUpdating} onClick={() => item.orders?.id && handleMarkDelivered(item.id, item.orders.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition ${isDelivered ? 'bg-green-500 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
                     {isDelivered ? <><CheckCircle className="w-4 h-4" /> ส่งสำเร็จ</> : 'ยืนยันการส่ง'}
                   </button>
                 </div>

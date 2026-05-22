@@ -23,6 +23,7 @@ export default function CheckoutPage() {
   const { items, getTotalPrice, clearCart } = useCartStore();
   const { activeBranchId } = useBranchStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false); // เพิ่ม State เช็คว่าสั่งซื้อสำเร็จหรือยัง
   const [user, setUser] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
@@ -46,7 +47,7 @@ export default function CheckoutPage() {
 
   // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง และตรวจสอบสถานะ Auth แบบเงียบๆ
   useEffect(() => {
-    if (items.length === 0) {
+    if (items.length === 0 && !isSuccess) { // เพิ่ม && !isSuccess ตรงนี้
       router.push('/');
       return;
     }
@@ -58,7 +59,7 @@ export default function CheckoutPage() {
       setIsAuthChecking(false);
     };
     checkAuth();
-  }, [items, router, supabase.auth]);
+  }, [items, router, supabase.auth, isSuccess]); // อย่าลืมใส่ isSuccess ใน Dependency Array
 
   // ฟังก์ชันอัปเดตแบบฟอร์ม
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -103,8 +104,9 @@ export default function CheckoutPage() {
       if (itemsError) throw new Error(itemsError.message);
 
       // 3. สำเร็จ: ล้างตะกร้าและเปลี่ยนหน้า
+      setIsSuccess(true); // เซ็ตค่าเป็น true เพื่อล็อกไม่ให้ useEffect เตะกลับหน้าแรก
       clearCart();
-      router.push(`/checkout/success`); // คุณสามารถสร้างหน้า Success Page ต่อจากนี้ได้
+      router.push(`/checkout/success?orderId=${orderData.id}`); // แนบ orderId ไปด้วย
 
     } catch (error: any) {
       console.error('Error placing order:', error);

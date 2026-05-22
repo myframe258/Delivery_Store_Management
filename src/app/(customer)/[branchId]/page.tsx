@@ -28,7 +28,7 @@ export default async function BranchStorefrontPage({
   const { data: inventory, error: inventoryError } = await supabase
     .from('branch_inventory')
     .select(`
-      stock,
+      stock_count,
       status,
       products (
         id,
@@ -39,13 +39,13 @@ export default async function BranchStorefrontPage({
       )
     `)
     .eq('branch_id', branchId)
-    .gt('stock', 0) // ดึงเฉพาะสินค้าที่มีสต็อกมากกว่า 0
+    .gt('stock_count', 0) // ดึงเฉพาะสินค้าที่มีสต็อกมากกว่า 0
     .neq('status', 0); // ดึงเฉพาะสินค้าที่สถานะไม่ใช่ out_of_stock
 
   // แปลงข้อมูลให้อ่านง่ายขึ้น
   const products = inventory?.map((item: any) => ({
     ...item.products,
-    stock: item.stock,
+    stock_count: item.stock_count,
   })) || [];
 
   return (
@@ -87,7 +87,7 @@ export default async function BranchStorefrontPage({
                   <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
                   <div className="mt-auto flex items-center justify-between mb-3">
                     <span className="font-bold text-lg text-blue-600">฿{product.price.toLocaleString()}</span>
-                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded">เหลือ: {product.stock}</span>
+                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded">เหลือ: {product.stock_count}</span>
                   </div>
                   <AddToCartButton product={product} branchId={branchId} />
                 </div>

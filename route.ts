@@ -1,78 +1,58 @@
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
-interface OrderLocation {
-  id: string;
-  lat: number;
-  lng: number;
-  [key: string]: any; // ข้อมูลอื่นๆ เช่น customer_info
-}
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  
+  // ตรวจสอบว่าผู้ใช้ล็อกอินหรือไม่
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-interface OptimizeRequest {
-  branchLocation: {
-    lat: number;
-    lng: number;
-  };
-  orders: OrderLocation[];
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: { branchId: string } }
-) {
   try {
-    const { branchId } = params;
-    const body: OptimizeRequest = await request.json();
-    const { branchLocation, orders } = body;
+    // ดึงข้อมูลจาก request body
+    const {
+      branch_id,
+      total_price,
+      customer_info,
+      lat,
+      lng,
+      items,
+    } = await request.json();
 
-    // 1. ตรวจสอบความถูกต้องของข้อมูลที่ส่งมา
-    if (!branchLocation || !orders || !Array.isArray(orders) || orders.length === 0) {
-      return NextResponse.json({ error: 'ข้อมูลสาขาหรือออเดอร์ไม่ถูกต้อง' }, { status: 400 });
+    // ตรวจสอบข้อมูลพื้นฐาน
+    if (!branch_id || !items || items.length === 0 || !lat || !lng) {
+      return NextResponse.json({ error: 'ข้อมูลไม่ครบถ้วน' }, { status: 400 });
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'ไม่พบ Google Maps API Key ในระบบ' }, { status: 500 });
+    // เรียกใช้ RPC Function ที่สร้างไว้บน Supabase
+    const { data: newOrderId, error: rpcError } = await supabase.rpc(
+      'create_order_and_decrement_stock', 
+      {
+        p_branch_id: branch_id,
+        p_customer_id: user.id,
+        p_total_price: total_price,
+        p_customer_info: customer_info,
+        p_lat: lat.toString(),
+        p_lng: lng.toString(),
+        p_items: items,
+      }
+    );
+
+    if (rpcError) {
+      console.error('RPC Error:', rpcError);
+      // แปลง Error จาก Database ให้เป็นข้อความที่ User เข้าใจง่าย
+      const friendlyMessage = rpcError.message.includes('สินค้าไม่เพียงพอ') 
+        ? `ขออภัย, ${rpcError.message.split(': ')[1]} มีจำนวนไม่พอในสต็อก`
+        : 'เกิดข้อผิดพลาดในการสร้างออเดอร์';
+      return NextResponse.json({ error: friendlyMessage, details: rpcError.message }, { status: 400 });
     }
 
-    // 2. จัดเตรียมพารามิเตอร์สำหรับ Google Maps Directions API
-    // กำหนดให้จุดเริ่มต้น (Origin) และจุดสิ้นสุด (Destination) เป็นที่ตั้งสาขา เพื่อสร้าง Loop การจัดส่งกลับมาที่เดิม
-    const origin = `${branchLocation.lat},${branchLocation.lng}`;
-    const destination = origin;
+    return NextResponse.json({ success: true, orderId: newOrderId }, { status: 201 });
 
-    // นำพิกัดออเดอร์ทั้งหมดมาต่อกันด้วย | และนำหน้าด้วย optimize:true เพื่อสั่งให้ Google จัดเรียงลำดับใหม่
-    const waypointsList = orders.map((o) => `${o.lat},${o.lng}`).join('|');
-    const waypoints = `optimize:true|${waypointsList}`;
-
-    // 3. สร้าง URL และยิง Request ไปยัง Google
-    const url = new URL('https://maps.googleapis.com/maps/api/directions/json');
-    url.searchParams.append('origin', origin);
-    url.searchParams.append('destination', destination);
-    url.searchParams.append('waypoints', waypoints);
-    url.searchParams.append('key', apiKey);
-
-    const response = await fetch(url.toString());
-    const data = await response.json();
-
-    if (data.status !== 'OK') {
-      return NextResponse.json(
-        { error: 'ไม่สามารถคำนวณเส้นทางได้', details: data.error_message || data.status },
-        { status: 500 }
-      );
-    }
-
-    // 4. ดึงลำดับใหม่ที่ผ่านการ Optimize แล้ว (waypoint_order จะเป็น array เช่น [2, 0, 1])
-    const waypointOrder: number[] = data.routes[0].waypoint_order;
-    const optimizedOrders = waypointOrder.map((index) => orders[index]);
-
-    // ดึง Polyline เพื่อนำไปใช้ลากเส้นทางบน Leaflet ได้ทันที
-    const encodedPolyline = data.routes[0].overview_polyline.points;
-
-    return NextResponse.json({
-      branchId,
-      optimizedOrders,
-      polyline: encodedPolyline,
-    });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' }, { status: 500 });
+    console.error('Order API Error:', error);
+    return NextResponse.json({ error: 'เกิดข้อผิดพลาดที่ไม่คาดคิดบนเซิร์ฟเวอร์' }, { status: 500 });
   }
 }

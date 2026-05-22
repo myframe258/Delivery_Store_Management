@@ -39,8 +39,10 @@ export async function POST(request: Request) {
     }
 
     // 3. แยกข้อมูลพิกัด (Branch Origin และ Orders Waypoints)
-    const branchLat = batchData.branches?.lat;
-    const branchLng = batchData.branches?.lng;
+    // เนื่องจาก Supabase query คืนค่า branches เป็น object หรือ array ขึ้นอยู่กับความสัมพันธ์
+    const branch = Array.isArray(batchData.branches) ? batchData.branches[0] : batchData.branches;
+    const branchLat = branch?.lat;
+    const branchLng = branch?.lng;
     const batchItems = batchData.batch_items || [];
 
     if (!branchLat || !branchLng) {
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     
     // ตรวจสอบว่ามีออเดอร์ใดที่พิกัดขาดหายหรือไม่
-    const hasMissingCoords = batchItems.some((item) => !item.orders?.lat || !item.orders?.lng);
+    const hasMissingCoords = batchItems.some((item: any) => !item.orders?.lat || !item.orders?.lng);
 
     if (!apiKey || hasMissingCoords || batchItems.length === 0) {
       // เงื่อนไขที่ไม่สามารถใช้ Google Maps ได้ (เข้าโหมด Fallback อัตโนมัติ)
@@ -69,7 +71,7 @@ export async function POST(request: Request) {
       const destination = origin;                 // จุดสิ้นสุด (ให้คนขับวิ่งกลับมาสาขาเป็น Loop)
       
       // ผสมพิกัดให้อยู่ในฟอร์แมต "lat,lng|lat,lng" และเปิด optimize:true
-      const waypoints = batchItems.map((item) => `${item.orders.lat},${item.orders.lng}`).join('|');
+      const waypoints = batchItems.map((item: any) => `${item.orders.lat},${item.orders.lng}`).join('|');
       const googleMapsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&waypoints=optimize:true|${waypoints}&key=${apiKey}`;
       
       // 6. ส่ง Request ไปยัง Google Maps API
@@ -95,10 +97,10 @@ export async function POST(request: Request) {
     // 9. Fallback Logic: จัดเรียงตามเวลาการสั่งซื้อ (created_at) กรณีที่ไม่สามารถ Optimize ได้
     if (isFallback) {
       // จำลองการจัดคิวแบบ First-In-First-Out (FIFO) ใครสั่งก่อนได้ส่งก่อน
-      optimizedItems = [...batchItems].sort((a, b) => {
+      optimizedItems = [...batchItems].sort((a: any, b: any) => {
         // ถ้าข้อมูลวันที่เกิดข้อผิดพลาดให้ fallback ไปที่ 0 (1 Jan 1970)
-        const dateA = new Date(a.orders?.created_at || 0).getTime();
-        const dateB = new Date(b.orders?.created_at || 0).getTime();
+        const dateA = new Date(a.orders?.[0]?.created_at || a.orders?.created_at || 0).getTime();
+        const dateB = new Date(b.orders?.[0]?.created_at || b.orders?.created_at || 0).getTime();
         return dateA - dateB; 
       });
     }

@@ -274,6 +274,7 @@ export default function BatchingPage() {
                           <input
                             type="checkbox"
                             checked={isSelected}
+                            title={`เลือกออเดอร์ #${order.id.slice(0, 6).toUpperCase()}`}
                             readOnly
                             className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                           />
@@ -291,6 +292,7 @@ export default function BatchingPage() {
               <select
                 value={selectedRiderId}
                 onChange={(e) => setSelectedRiderId(e.target.value)}
+                title="เลือกคนขับสำหรับรอบส่งนี้"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
               >
                 <option value="">-- ยังไม่มอบหมาย (รอจัดสรรทีหลัง) --</option>
@@ -388,6 +390,7 @@ export default function BatchingPage() {
                         <select
                           value={batch.driver_id || ''}
                           onChange={(e) => handleUpdateBatchDriver(batch.id, e.target.value)}
+                          title="เลือกคนขับเพื่อมอบหมายงาน"
                           disabled={batch.batch_status === 'in_progress'}
                           className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed bg-white"
                         >

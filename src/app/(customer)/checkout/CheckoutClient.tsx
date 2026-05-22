@@ -35,7 +35,7 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
   const [isLocating, setIsLocating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const { items, totalPrice, clearCart } = useCartStore();
+  const { items, getTotalPrice, clearCart } = useCartStore();
   const router = useRouter();
   
   const markerRef = useRef<any>(null);
@@ -115,7 +115,7 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           branch_id: branch.id,
-          total_price: totalPrice,
+          total_price: getTotalPrice(),
           customer_info: {
             name: user.user_metadata?.full_name || user.email,
             phone: user.phone || '',

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AddToCartButton from '@/components/ui/AddToCartButton';
 import BranchGuard from '@/components/utilities/BranchGuard';
+import { Package } from 'lucide-react';
 
 export default async function BranchStorefrontPage({
   params,
@@ -49,8 +50,8 @@ export default async function BranchStorefrontPage({
   })) || [];
 
   return (
-
-
+    <>
+      <BranchGuard />
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-5xl mx-auto">
         {/* Header ของสาขา */}
@@ -77,10 +78,14 @@ export default async function BranchStorefrontPage({
             {products.map((product) => (
               <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition">
                 <div className="h-48 bg-gray-100 w-full relative">
-                  {/* ถ้ามี image_url สามารถใส่ <img src={product.image_url} /> ได้ตรงนี้ */}
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-                    {product.name} Image
-                  </div>
+                  {product.image_url ? (
+                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                      <Package className="w-10 h-10 mb-2 opacity-50" />
+                      <span className="text-xs font-medium">ไม่มีรูปภาพ</span>
+                    </div>
+                  )}
                 </div>
                 <div className="p-4 flex flex-col flex-grow">
                   <h2 className="font-semibold text-lg text-gray-800 mb-1 line-clamp-1">{product.name}</h2>
@@ -97,5 +102,6 @@ export default async function BranchStorefrontPage({
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -8,22 +8,34 @@ import { createClient } from '../../lib/client';
 
 export default function LoginPage() {
   const router = useRouter();
-  // สร้าง instance ของ Supabase client แบบใช้งานฝั่ง Client
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
-    // ติดตามสถานะ (Session) ของผู้ใช้
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || session) {
+        const role = session?.user?.app_metadata?.role || session?.user?.user_metadata?.role;
+        
+        if (session?.user && !role) {
+          await supabase.auth.updateUser({
+            data: { role: 'customer' }
+          });
+        }
+
         router.push('/dashboard');
-        router.refresh(); // บังคับให้ Next.js โหลด Middleware เพื่ออัปเดตสิทธิ์การเข้าถึงใหม่
+        router.refresh(); 
       }
     });
 
     return () => subscription.unsubscribe();
   }, [router, supabase]);
+
+  // ฟังก์ชันสำหรับล็อกอินด้วย Custom Provider (LINE)
+  const signInWithLine = () => {
+    // นำทางผู้ใช้ไปยัง Route ของเราเพื่อขอ Authorization Code จาก LINE
+    window.location.href = '/api/auth/line/login';
+  };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -32,9 +44,25 @@ export default function LoginPage() {
           <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
             เข้าสู่ระบบ
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-500">
-            สำหรับผู้ดูแลระบบและพนักงานจัดส่ง
-          </p>
+        </div>
+        
+        {/* ปุ่ม LINE Custom Button */}
+        <button
+          onClick={signInWithLine}
+          type="button"
+          className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#00C300] hover:bg-[#00B300] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C300] transition-colors"
+        >
+          {/* สามารถใส่ Icon ของ LINE ตรงนี้ได้ถ้ามี */}
+          เข้าสู่ระบบด้วย LINE
+        </button>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">หรือ</span>
+          </div>
         </div>
         
         <Auth
@@ -44,13 +72,13 @@ export default function LoginPage() {
             variables: {
               default: {
                 colors: {
-                  brand: '#2563eb', // สีฟ้า Tailwind blue-600
-                  brandAccent: '#1d4ed8', // สีฟ้า Tailwind blue-700
+                  brand: '#2563eb', 
+                  brandAccent: '#1d4ed8',
                 }
               }
             }
           }}
-          providers={[]} // ปิดการใช้ Social Login
+          // ⚠️ เอา providers={['line']} ออก เพื่อให้เหลือแค่การใช้ Email อย่างเดียว
         />
       </div>
     </div>

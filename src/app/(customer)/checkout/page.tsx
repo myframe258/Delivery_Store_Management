@@ -257,20 +257,31 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!activeBranchId) return alert('ไม่พบข้อมูลสาขา กรุณาเลือกสาขาใหม่');
     if (distanceKm !== null && !isWithinRadius) return alert('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
+    if (!deliveryDate || !deliverySlot) return alert('กรุณาเลือกวันที่และรอบการจัดส่ง');
 
     setIsSubmitting(true);
 
     try {
+      // ตรวจสอบกฎ Cut-off ฝั่งเซิร์ฟเวอร์ก่อนบันทึก
+      const validation = await validateDeliverySlot(deliveryDate, deliverySlot);
+      if (!validation.success) {
+        alert(validation.error);
+        setIsSubmitting(false);
+        return;
+      }
+
       // 1. บันทึกข้อมูลลงตาราง orders
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
           branch_id: Number(activeBranchId), // ตารางต้องการ bigint
           customer_id: user?.id, // บันทึกไอดีลูกค้าลง Database
-            total_price: getTotalPrice() + deliveryFee,
+          total_price: getTotalPrice() + deliveryFee,
           lat: location.lat,
           lng: location.lng,
-            customer_info: { ...formData, delivery_fee: deliveryFee, distance_km: distanceKm }, // เก็บเป็น JSONB ตามโครงสร้าง Database
+          delivery_date: deliveryDate,
+          delivery_slot: deliverySlot,
+          customer_info: { ...formData, delivery_fee: deliveryFee, distance_km: distanceKm }, // เก็บเป็น JSONB ตามโครงสร้าง Database
           status: 'pending',
         })
         .select('id')

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
-import { Package, Truck, CheckCircle, Clock, MapPin, ChevronRight, User } from 'lucide-react';
+import { Package, Truck, CheckCircle, Clock, MapPin, ChevronRight, User, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 type OrderItem = {
@@ -20,8 +20,16 @@ type Order = {
     created_at: string;
     status: 'pending' | 'batched' | 'delivered';
     total_price: number;
+    delivery_date?: string;
+    delivery_slot?: string;
     branches: { name: string };
     order_items: OrderItem[];
+};
+
+type DeliverySlot = {
+    id: string;
+    name: string;
+    time_range: string;
 };
 
 export default function CustomerOrdersPage() {
@@ -29,6 +37,7 @@ export default function CustomerOrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [user, setUser] = useState<any>(null);
+    const [slots, setSlots] = useState<DeliverySlot[]>([]);
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -53,6 +62,10 @@ export default function CustomerOrdersPage() {
 
             setUser(session.user);
 
+            // ดึงข้อมูลรอบจัดส่งเพื่อนำมา map แสดงชื่อ
+            const { data: slotsData } = await supabase.from('delivery_slots').select('id, name, time_range');
+            if (slotsData) setSlots(slotsData);
+
             // ดึงออเดอร์ของลูกค้าคนนี้เท่านั้น (RLS จะช่วยกรองอีกชั้น)
             const { data, error } = await supabase
                 .from('orders')
@@ -61,6 +74,8 @@ export default function CustomerOrdersPage() {
           created_at, 
           status, 
           total_price,
+          delivery_date,
+          delivery_slot,
           branches (name),
           order_items (
             quantity, 
@@ -150,7 +165,23 @@ export default function CustomerOrdersPage() {
                                     <div>
                                         <p className="text-sm text-gray-500">หมายเลขคำสั่งซื้อ</p>
                                         <p className="font-bold text-gray-900">#{order.id.slice(0, 8).toUpperCase()}</p>
-                                        <p className="text-xs text-gray-400 mt-1">{new Date(order.created_at).toLocaleString('th-TH')}</p>
+                                        <p className="text-xs text-gray-400 mt-1">สั่งเมื่อ: {new Date(order.created_at).toLocaleString('th-TH')}</p>
+                                        
+                                        {/* แสดงวันและรอบจัดส่ง */}
+                                        {order.delivery_date && (
+                                            <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                                                <span className="flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
+                                                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                                                    จัดส่ง: {new Date(order.delivery_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                </span>
+                                                {order.delivery_slot && slots.length > 0 && (
+                                                    <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md shadow-sm">
+                                                        {slots.find(s => s.id === order.delivery_slot)?.name || 'ไม่ระบุรอบ'} 
+                                                        {slots.find(s => s.id === order.delivery_slot)?.time_range && ` (${slots.find(s => s.id === order.delivery_slot)?.time_range})`}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex flex-col sm:items-end gap-2">
                                         {getStatusDisplay(order.status)}

@@ -18,11 +18,13 @@ export async function POST(request: Request) {
       customer_info,
       lat,
       lng,
+      delivery_date,
+      delivery_slot,
       items,
     } = await request.json();
 
     // ตรวจสอบข้อมูลพื้นฐาน
-    if (!branch_id || !items || items.length === 0 || !lat || !lng) {
+    if (!branch_id || !items || items.length === 0 || !lat || !lng || !delivery_date || !delivery_slot) {
       return NextResponse.json({ error: 'ข้อมูลไม่ครบถ้วน' }, { status: 400 });
     }
 
@@ -36,6 +38,8 @@ export async function POST(request: Request) {
         p_customer_info: customer_info,
         p_lat: lat.toString(),
         p_lng: lng.toString(),
+        p_delivery_date: delivery_date,
+        p_delivery_slot: delivery_slot,
         p_items: items,
       }
     );

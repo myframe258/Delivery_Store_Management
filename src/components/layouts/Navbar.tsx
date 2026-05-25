@@ -87,6 +87,9 @@ export default function Navbar() {
               <Link href="/super-admin/categories" className="flex items-center gap-1 hover:text-blue-600 transition">
                 <MapIcon className="w-4 h-4" /> จัดการหมวดหมู่
               </Link>
+              <Link href="/super-admin/delivery-slots" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <MapIcon className="w-4 h-4" /> จัดการรอบจัดส่ง
+              </Link>
             </>
           )}
 

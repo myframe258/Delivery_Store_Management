@@ -1,7 +1,15 @@
 'use server';
+import { createClient } from '@supabase/supabase-js';
 
-export async function validateDeliverySlot(deliveryDate: string, deliverySlot: string) {
+export async function validateDeliverySlot(deliveryDate: string, deliverySlotId: string) {
   try {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const { data: slot } = await supabase.from('delivery_slots').select('*').eq('id', deliverySlotId).single();
+    
+    if (!slot || !slot.is_active) {
+      return { success: false, error: 'รอบจัดส่งไม่ถูกต้อง หรือถูกปิดใช้งานแล้ว' };
+    }
+
     // 1. ดึงเวลาปัจจุบัน (แปลงเป็นเวลาไทย GMT+7 เพื่อความแม่นยำของ Cut-off)
     const serverNow = new Date();
     const thaiTime = new Date(serverNow.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
@@ -20,17 +28,9 @@ export async function validateDeliverySlot(deliveryDate: string, deliverySlot: s
 
     // กฎข้อที่ 2: เช็ค Cut-off time กรณีเลือกจัดส่ง "วันนี้"
     if (selectedDateObj.getTime() === todayDateObj.getTime()) {
-      if (currentHour >= 12) {
-        return { success: false, error: 'สั่งซื้อหลัง 12:00 น. ต้องเลือกรอบจัดส่งของวันพรุ่งนี้เป็นต้นไป' };
+      if (currentHour >= slot.cut_off_hour) {
+        return { success: false, error: `ไม่สามารถเลือกรอบ ${slot.name} สำหรับวันนี้ได้ เนื่องจากเลยเวลาตัดรอบแล้ว` };
       }
-      if (deliverySlot === 'morning') {
-        return { success: false, error: 'สั่งซื้อวันนี้ สามารถรับสินค้าได้รอบเร็วที่สุดคือ "รอบเย็น" (18:00-19:00)' };
-      }
-    }
-
-    // กฎข้อที่ 3: ป้องกันการแอบส่งค่า Slot แปลกๆ เข้ามา
-    if (!['morning', 'evening'].includes(deliverySlot)) {
-      return { success: false, error: 'รอบจัดส่งไม่ถูกต้อง' };
     }
 
     return { success: true };

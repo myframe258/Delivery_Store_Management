@@ -56,7 +56,8 @@ export default function CheckoutPage() {
 
   // State สำหรับวันและรอบจัดส่ง
   const [deliveryDate, setDeliveryDate] = useState<string>('');
-  const [deliverySlot, setDeliverySlot] = useState<'morning' | 'evening' | ''>('');
+  const [deliverySlot, setDeliverySlot] = useState<string>('');
+  const [slots, setSlots] = useState<any[]>([]);
   const [minDateStr, setMinDateStr] = useState<string>('');
   const [currentHour, setCurrentHour] = useState<number>(0);
 
@@ -95,14 +96,28 @@ export default function CheckoutPage() {
     const offset = minDateObj.getTimezoneOffset();
     const localDate = new Date(minDateObj.getTime() - (offset * 60 * 1000));
     setMinDateStr(localDate.toISOString().split('T')[0]);
+
+    // ดึงข้อมูลรอบจัดส่งจาก Database
+    const fetchSlots = async () => {
+      const { data } = await supabase
+        .from('delivery_slots')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (data) setSlots(data);
+    };
+    fetchSlots();
   }, []);
 
-  // รีเซ็ตรอบเช้าอัตโนมัติ ถ้าผู้ใช้คลิกเปลี่ยนมาเลือก "วันนี้" และยังไม่ถึงเที่ยง
+  // รีเซ็ตรอบที่เลือกอัตโนมัติ ถ้าผู้ใช้คลิกเปลี่ยนมาเลือก "วันนี้" แล้วรอบนั้นเลยเวลาตัดรอบ (cut_off_hour) ไปแล้ว
   useEffect(() => {
-    if (deliveryDate === todayStr && currentHour < 12 && deliverySlot === 'morning') {
-      setDeliverySlot('');
+    if (deliveryDate === todayStr && deliverySlot) {
+      const selectedSlotObj = slots.find(s => s.id === deliverySlot);
+      if (selectedSlotObj && currentHour >= selectedSlotObj.cut_off_hour) {
+        setDeliverySlot('');
+      }
     }
-  }, [deliveryDate, todayStr, currentHour, deliverySlot]);
+  }, [deliveryDate, todayStr, currentHour, deliverySlot, slots]);
 
   // ระบุว่าโหลดฝั่ง Client และกู้คืนข้อมูลตะกร้าเสร็จเรียบร้อยแล้ว
   useEffect(() => {
@@ -350,23 +365,26 @@ export default function CheckoutPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">เวลารอบจัดส่ง</label>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <label className={`flex-1 flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${deliveryDate === todayStr && currentHour < 12 ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === 'morning' ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
-                    <input type="radio" name="slot" value="morning" className="sr-only" 
-                           disabled={deliveryDate === todayStr && currentHour < 12}
-                           checked={deliverySlot === 'morning'} 
-                           onChange={() => setDeliverySlot('morning')} />
-                    <span className="text-sm font-medium text-center">รอบเช้า<br/><span className="text-xs font-normal opacity-80">(08:00 - 09:00)</span></span>
-                  </label>
-                  <label className={`flex-1 flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${deliverySlot === 'evening' ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
-                    <input type="radio" name="slot" value="evening" className="sr-only" 
-                           checked={deliverySlot === 'evening'} 
-                           onChange={() => setDeliverySlot('evening')} />
-                    <span className="text-sm font-medium text-center">รอบเย็น<br/><span className="text-xs font-normal opacity-80">(18:00 - 19:00)</span></span>
-                  </label>
-                </div>
-                {deliveryDate === todayStr && currentHour < 12 && (
-                  <p className="text-xs text-orange-600 mt-3 font-medium flex gap-1"><AlertCircle className="w-4 h-4"/> วันนี้จัดส่งได้เฉพาะรอบเย็นเท่านั้น (สั่งก่อน 12:00 น.)</p>
+                {slots.length === 0 ? (
+                  <p className="text-sm text-gray-500">กำลังโหลดรอบจัดส่ง...</p>
+                ) : (
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                    {slots.map(slot => {
+                      const isDisabled = deliveryDate === todayStr && currentHour >= slot.cut_off_hour;
+                      return (
+                        <label key={slot.id} className={`flex-1 min-w-[120px] flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === slot.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
+                          <input type="radio" name="slot" value={slot.id} className="sr-only" 
+                                disabled={isDisabled}
+                                checked={deliverySlot === slot.id} 
+                                onChange={() => setDeliverySlot(slot.id)} />
+                          <span className="text-sm font-medium text-center">{slot.name}<br/><span className="text-xs font-normal opacity-80">({slot.time_range})</span></span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+                {deliveryDate === todayStr && slots.some(s => currentHour >= s.cut_off_hour) && (
+                  <p className="text-xs text-orange-600 mt-3 font-medium flex items-start gap-1"><AlertCircle className="w-4 h-4 shrink-0"/> บางรอบจัดส่งถูกปิดใช้งานสำหรับวันนี้ เนื่องจากเลยเวลาตัดรอบแล้ว</p>
                 )}
               </div>
             </div>

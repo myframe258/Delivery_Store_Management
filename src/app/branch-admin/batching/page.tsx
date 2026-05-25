@@ -26,8 +26,24 @@ export default function BatchingPage() {
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
   const [activeBatches, setActiveBatches] = useState<any[]>([]);
+  const [groupedSlots, setGroupedSlots] = useState<any>({});
+  
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const todayObj = new Date();
+    return new Date(todayObj.getTime() - (todayObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+  });
 
   useEffect(() => {
+    // แก้ปัญหา Leaflet หาภาพ Marker เริ่มต้นไม่เจอ (404 Not Found) ใน Next.js
+    import('leaflet').then((L) => {
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+    });
+
     setMounted(true);
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,12 +77,19 @@ export default function BatchingPage() {
       
       setBranch(branchData);
 
-      // 3. ดึงออเดอร์ทั้งหมดของสาขานี้ ที่ยังไม่ได้จัดรอบ (pending)
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('branch_id', branchId)
-        .eq('status', 'pending');
+      // 3. ดึงออเดอร์ทั้งหมดของสาขานี้ ผ่าน API จัดกลุ่มรอบส่ง
+      let ordersData = [];
+      try {
+        const res = await fetch(`/api/branch-admin/orders-by-slot?date=${selectedDate}`);
+        if (res.ok) {
+          const data = await res.json();
+          const allOrders = Object.values(data.slots).flatMap((slot: any) => slot.orders);
+          ordersData = allOrders.filter((o: any) => o.status === 'pending');
+          setGroupedSlots(data.slots || {});
+        }
+      } catch (err) {
+        console.error('Failed to fetch orders by slot', err);
+      }
 
       setOrders(ordersData || []);
 
@@ -98,6 +121,25 @@ export default function BatchingPage() {
       setLoading(false);
     }
   };
+
+  // ดึงออเดอร์ใหม่เมื่อเปลี่ยนวันที่
+  useEffect(() => {
+    if (!branch) return;
+    const fetchOrdersOnly = async () => {
+      try {
+        const res = await fetch(`/api/branch-admin/orders-by-slot?date=${selectedDate}`);
+        if (res.ok) {
+          const data = await res.json();
+          const allOrders = Object.values(data.slots).flatMap((slot: any) => slot.orders);
+          setOrders(allOrders.filter((o: any) => o.status === 'pending'));
+          setGroupedSlots(data.slots || {});
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchOrdersOnly();
+  }, [selectedDate, branch]);
 
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrderIds((prev) =>
@@ -229,6 +271,36 @@ export default function BatchingPage() {
     return <div className="p-8 text-center text-red-500">ไม่พบข้อมูลสาขา กรุณาตรวจสอบว่าบัญชีนี้ผูกกับสาขาแล้วหรือไม่</div>;
   }
 
+  // Component ย่อยสำหรับแสดงรายการออเดอร์แต่ละชิ้น
+  const renderOrderItem = (order: any) => {
+    const isSelected = selectedOrderIds.includes(order.id);
+    return (
+      <li
+        key={order.id}
+        className={`p-3 border rounded-xl cursor-pointer transition-all ${
+          isSelected
+            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+        }`}
+        onClick={() => toggleOrderSelection(order.id)}
+      >
+        <div className="flex justify-between items-start">
+          <div>
+            <span className="font-semibold text-gray-800">ออเดอร์ #{order.id.slice(0, 6).toUpperCase()}</span>
+            <p className="text-sm text-gray-500 mt-1">ยอดรวม: ฿{order.total_price.toLocaleString()}</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            title={`เลือกออเดอร์ #${order.id.slice(0, 6).toUpperCase()}`}
+            readOnly
+            className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+          />
+        </div>
+      </li>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-4 flex flex-col gap-6">
       {/* Header & Tabs */}
@@ -248,41 +320,35 @@ export default function BatchingPage() {
         <div className="flex flex-col md:flex-row gap-6">
           {/* ฝั่งซ้าย: รายการออเดอร์และปุ่มดำเนินการ */}
           <div className="w-full md:w-1/3 flex flex-col gap-4">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-1 overflow-y-auto max-h-[500px]">
-              <h2 className="text-lg font-semibold mb-3 text-gray-700">ออเดอร์รอส่ง ({orders.length})</h2>
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-1 overflow-y-auto max-h-[500px] flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-700">รอจัดส่ง ({orders.length})</h2>
+                <input 
+                  type="date" 
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                />
+              </div>
+              
               {orders.length === 0 ? (
-                <p className="text-gray-400 text-sm py-4 text-center">ขณะนี้ไม่มีออเดอร์รอจัดส่ง</p>
+                <p className="text-gray-400 text-sm py-4 text-center">ไม่มีออเดอร์รอจัดส่งในวันที่เลือก</p>
               ) : (
-                <ul className="space-y-3">
-                  {orders.map((order) => {
-                    const isSelected = selectedOrderIds.includes(order.id);
+                <div className="space-y-6">
+                  {Object.entries(groupedSlots).map(([slotId, slotInfo]: [string, any]) => {
+                    const slotOrders = slotInfo.orders.filter((o: any) => o.status === 'pending');
+                    if (slotOrders.length === 0) return null;
+                    
                     return (
-                      <li
-                        key={order.id}
-                        className={`p-3 border rounded-xl cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                        }`}
-                        onClick={() => toggleOrderSelection(order.id)}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-semibold text-gray-800">ออเดอร์ #{order.id.slice(0, 6).toUpperCase()}</span>
-                            <p className="text-sm text-gray-500 mt-1">ยอดรวม: ฿{order.total_price.toLocaleString()}</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            title={`เลือกออเดอร์ #${order.id.slice(0, 6).toUpperCase()}`}
-                            readOnly
-                            className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          />
-                        </div>
-                      </li>
-                    );
+                      <div key={slotId}>
+                        <h3 className="text-sm font-bold text-blue-800 bg-blue-50 px-3 py-2 rounded-lg mb-3">
+                          📌 {slotInfo.name} {slotInfo.time_range && <span className="font-normal text-sm opacity-80">({slotInfo.time_range})</span>}
+                        </h3>
+                        <ul className="space-y-3">{slotOrders.map(renderOrderItem)}</ul>
+                      </div>
+                    )
                   })}
-                </ul>
+                </div>
               )}
             </div>
 

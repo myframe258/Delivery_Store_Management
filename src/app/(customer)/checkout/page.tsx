@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
 import { Plus, Minus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
+import { validateDeliverySlot } from '@/app/actions/checkoutAction';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
 const CheckoutMap = dynamic(() => import('@/components/maps/CheckoutMap'), {
@@ -53,6 +54,12 @@ export default function CheckoutPage() {
     address: '',
   });
 
+  // State สำหรับวันและรอบจัดส่ง
+  const [deliveryDate, setDeliveryDate] = useState<string>('');
+  const [deliverySlot, setDeliverySlot] = useState<'morning' | 'evening' | ''>('');
+  const [minDateStr, setMinDateStr] = useState<string>('');
+  const [currentHour, setCurrentHour] = useState<number>(0);
+
   // State สำหรับพิกัดแผนที่ (Default: กรุงเทพฯ กรณีไม่มีข้อมูล)
   const [location, setLocation] = useState<{ lat: number; lng: number }>({
     lat: 13.7563,
@@ -69,6 +76,33 @@ export default function CheckoutPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  // แปลงวันที่ปัจจุบันเป็น YYYY-MM-DD แบบปลอดภัยไม่ติด Timezone เพี้ยน
+  const todayObj = new Date();
+  const todayStr = new Date(todayObj.getTime() - (todayObj.getTimezoneOffset() * 60 * 1000)).toISOString().split('T')[0];
+
+  // คำนวณ Cut-off time เบื้องต้นสำหรับ UI
+  useEffect(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    setCurrentHour(hour);
+    
+    const minDateObj = new Date(now);
+    if (hour >= 12) {
+      minDateObj.setDate(minDateObj.getDate() + 1); // สั่งหลังเที่ยง บังคับเริ่มวันพรุ่งนี้
+    }
+    
+    const offset = minDateObj.getTimezoneOffset();
+    const localDate = new Date(minDateObj.getTime() - (offset * 60 * 1000));
+    setMinDateStr(localDate.toISOString().split('T')[0]);
+  }, []);
+
+  // รีเซ็ตรอบเช้าอัตโนมัติ ถ้าผู้ใช้คลิกเปลี่ยนมาเลือก "วันนี้" และยังไม่ถึงเที่ยง
+  useEffect(() => {
+    if (deliveryDate === todayStr && currentHour < 12 && deliverySlot === 'morning') {
+      setDeliverySlot('');
+    }
+  }, [deliveryDate, todayStr, currentHour, deliverySlot]);
 
   // ระบุว่าโหลดฝั่ง Client และกู้คืนข้อมูลตะกร้าเสร็จเรียบร้อยแล้ว
   useEffect(() => {
@@ -297,6 +331,45 @@ export default function CheckoutPage() {
                 <textarea required name="address" value={formData.address} onChange={handleChange} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
               </div>
             </form>
+          </div>
+
+          {/* กล่องเลือกรอบจัดส่ง */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">เลือกรอบจัดส่งสินค้า</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">วันที่จัดส่ง</label>
+                <input 
+                  type="date" 
+                  required
+                  min={minDateStr}
+                  value={deliveryDate} 
+                  onChange={(e) => setDeliveryDate(e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">เวลารอบจัดส่ง</label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <label className={`flex-1 flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${deliveryDate === todayStr && currentHour < 12 ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === 'morning' ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
+                    <input type="radio" name="slot" value="morning" className="sr-only" 
+                           disabled={deliveryDate === todayStr && currentHour < 12}
+                           checked={deliverySlot === 'morning'} 
+                           onChange={() => setDeliverySlot('morning')} />
+                    <span className="text-sm font-medium text-center">รอบเช้า<br/><span className="text-xs font-normal opacity-80">(08:00 - 09:00)</span></span>
+                  </label>
+                  <label className={`flex-1 flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${deliverySlot === 'evening' ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
+                    <input type="radio" name="slot" value="evening" className="sr-only" 
+                           checked={deliverySlot === 'evening'} 
+                           onChange={() => setDeliverySlot('evening')} />
+                    <span className="text-sm font-medium text-center">รอบเย็น<br/><span className="text-xs font-normal opacity-80">(18:00 - 19:00)</span></span>
+                  </label>
+                </div>
+                {deliveryDate === todayStr && currentHour < 12 && (
+                  <p className="text-xs text-orange-600 mt-3 font-medium flex gap-1"><AlertCircle className="w-4 h-4"/> วันนี้จัดส่งได้เฉพาะรอบเย็นเท่านั้น (สั่งก่อน 12:00 น.)</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">

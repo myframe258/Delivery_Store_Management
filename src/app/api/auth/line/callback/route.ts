@@ -42,6 +42,11 @@ export async function GET(request: Request) {
 
     const cookieStore = await cookies();
     
+    // ดึงค่า returnTo ออกมาจาก Cookie
+    const returnTo = cookieStore.get('returnTo')?.value || '/dashboard';
+    // ลบ Cookie ทิ้งเมื่อใช้งานเสร็จแล้ว
+    cookieStore.delete('returnTo');
+    
     // Client สำหรับดึง Session ลงเบราว์เซอร์ผู้ใช้
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -86,7 +91,7 @@ export async function GET(request: Request) {
       await supabase.auth.signInWithPassword({ email, password });
     }
 
-    return NextResponse.redirect(`${safeOrigin}/dashboard`);
+    return NextResponse.redirect(`${safeOrigin}${returnTo}`);
   } catch (error) {
     console.error('LINE Auth Error:', error);
     return NextResponse.redirect(`${origin}/login?error=auth-callback-failed`);

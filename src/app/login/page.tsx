@@ -11,6 +11,10 @@ export default function LoginPage() {
   const [supabase] = useState(() => createClient());
 
   useEffect(() => {
+    // อ่านค่า returnTo จาก URL เพื่อให้กลับไปหน้าเดิม (เช่น หน้า Checkout)
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo') || '/dashboard';
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -23,7 +27,7 @@ export default function LoginPage() {
           });
         }
 
-        router.push('/dashboard');
+        router.push(returnTo);
         router.refresh(); 
       }
     });
@@ -33,8 +37,10 @@ export default function LoginPage() {
 
   // ฟังก์ชันสำหรับล็อกอินด้วย Custom Provider (LINE)
   const signInWithLine = () => {
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo') || '/dashboard';
     // นำทางผู้ใช้ไปยัง Route ของเราเพื่อขอ Authorization Code จาก LINE
-    window.location.href = '/api/auth/line/login';
+    window.location.href = `/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`;
   };
 
   return (

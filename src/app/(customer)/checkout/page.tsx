@@ -44,6 +44,7 @@ export default function CheckoutPage() {
   const [isSuccess, setIsSuccess] = useState(false); // เพิ่ม State เช็คว่าสั่งซื้อสำเร็จหรือยัง
   const [user, setUser] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isMounted, setIsMounted] = useState(false); // เพิ่ม State สำหรับรอโหลดข้อมูล
 
   // State สำหรับเก็บข้อมูลลูกค้า
   const [formData, setFormData] = useState({
@@ -69,8 +70,14 @@ export default function CheckoutPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
+  // ระบุว่าโหลดฝั่ง Client และกู้คืนข้อมูลตะกร้าเสร็จเรียบร้อยแล้ว
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง และตรวจสอบสถานะ Auth แบบเงียบๆ
   useEffect(() => {
+    if (!isMounted) return; // รอให้ดึงข้อมูลจาก LocalStorage ให้เสร็จก่อน
     if (items.length === 0 && !isSuccess) { // เพิ่ม && !isSuccess ตรงนี้
       router.push('/');
       return;
@@ -83,7 +90,7 @@ export default function CheckoutPage() {
       setIsAuthChecking(false);
     };
     checkAuth();
-  }, [items, router, supabase.auth, isSuccess]); // อย่าลืมใส่ isSuccess ใน Dependency Array
+  }, [items, router, supabase.auth, isSuccess, isMounted]); // เพิ่ม isMounted ใน Dependency Array
 
   // ดึงตำแหน่งปัจจุบันของลูกค้า
   useEffect(() => {
@@ -216,7 +223,8 @@ export default function CheckoutPage() {
     }
   };
 
-  if (items.length === 0) return null; // ป้องกัน UI กะพริบก่อนถูก Redirect
+  if (!isMounted) return null; // ซ่อน UI ระหว่างรอข้อมูลตะกร้า
+  if (items.length === 0 && !isSuccess) return null; // ป้องกัน UI กะพริบก่อนถูก Redirect
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 md:px-8">

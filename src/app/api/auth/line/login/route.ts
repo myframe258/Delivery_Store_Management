@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
-    const { origin } = new URL(request.url);
+    const { origin, searchParams } = new URL(request.url);
+
+    // รับค่า returnTo และเก็บไว้ใน Cookie (ใช้สำหรับการ Redirect กลับหลัง Login สำเร็จ)
+    const returnTo = searchParams.get('returnTo') || '/dashboard';
+    const cookieStore = await cookies();
+    cookieStore.set('returnTo', returnTo, { path: '/', maxAge: 600 }); // เก็บไว้ 10 นาที
 
     const clientId = process.env.NEXT_PUBLIC_LINE_CLIENT_ID;
     // ป้องกันปัญหาจากการรันเซิร์ฟเวอร์บน 0.0.0.0 โดยแปลงเป็น localhost ให้ตรงกับ LINE Developers

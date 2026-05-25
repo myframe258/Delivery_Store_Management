@@ -40,6 +40,8 @@ export async function proxy(request: NextRequest) {
   if (path.startsWith('/branch-admin') && role !== 'branch_admin') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
   if (path.startsWith('/rider') && role !== 'rider') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
   if (path.startsWith('/super-admin') && role !== 'super_admin') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
+  if (path.startsWith('/picker') && role !== 'picker') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
+
 
   return supabaseResponse;
 }

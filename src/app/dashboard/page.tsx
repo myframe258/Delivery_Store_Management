@@ -22,6 +22,8 @@ export default async function DashboardPage() {
       return redirect('/branch-admin/inventory');
     case 'rider':
       return redirect('/rider/batches');
+    case 'picker':
+      return redirect('/picker/dashboard');
     default:
       return redirect('/'); // สำหรับลูกค้าหรือผู้ใช้ที่ไม่มี role
   }

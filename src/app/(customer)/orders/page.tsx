@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
-import { Package, Truck, CheckCircle, Clock, MapPin, ChevronRight } from 'lucide-react';
+import { Package, Truck, CheckCircle, Clock, MapPin, ChevronRight, User } from 'lucide-react';
 import Link from 'next/link';
 
 type OrderItem = {
@@ -123,9 +123,14 @@ export default function CustomerOrdersPage() {
                         <Package className="w-8 h-8 text-blue-600" />
                         การสั่งซื้อของฉัน
                     </h1>
-                    <Link href="/" className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center">
-                        สั่งซื้อสินค้าเพิ่ม <ChevronRight className="w-4 h-4" />
-                    </Link>
+          <div className="flex gap-3 items-center">
+            <Link href="/profile" className="text-gray-700 hover:text-blue-600 font-medium text-sm flex items-center gap-1 bg-white border border-gray-200 px-3 py-2 rounded-lg shadow-sm transition-colors">
+              <User className="w-4 h-4" /> <span className="hidden sm:inline">จัดการโปรไฟล์</span>
+            </Link>
+            <Link href="/" className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center">
+              สั่งซื้อเพิ่ม <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
                 </div>
 
                 {orders.length === 0 ? (

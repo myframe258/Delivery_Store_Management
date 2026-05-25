@@ -83,33 +83,64 @@ export default function CheckoutPage() {
       return;
     }
 
-    const checkAuth = async () => {
+    const checkAuthAndProfile = async () => {
       setIsAuthChecking(true);
       const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+
+      let hasSavedLocation = false;
+
+      if (currentUser) {
+        // 1. ดึงข้อมูลโปรไฟล์ล่าสุดจากตาราง users
+        const { data: profile } = await supabase
+          .from('users')
+          .select('name, phone, lat, lng')
+          .eq('id', currentUser.id)
+          .single();
+
+        // 2. ดึงที่อยู่จัดส่งแบบข้อความจาก LocalStorage
+        const savedAddress = localStorage.getItem('last_saved_address') || '';
+
+        // 3. กำหนดค่าลงในแบบฟอร์ม
+        setFormData(prev => ({
+          ...prev,
+          name: profile?.name || currentUser.user_metadata?.name || currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || '',
+          phone: profile?.phone || currentUser.phone || currentUser.user_metadata?.phone || '',
+          address: savedAddress,
+        }));
+
+        // 4. ถ้ามีพิกัด ให้ขยับหมุดไปที่เดิม
+        if (profile?.lat && profile?.lng) {
+          setLocation({ lat: Number(profile.lat), lng: Number(profile.lng) });
+          setIsLocating(false);
+          hasSavedLocation = true;
+        }
+      }
+
+      // หากยังไม่มีพิกัดที่เคยบันทึก ค่อยหาตำแหน่งปัจจุบันของลูกค้า
+      if (!hasSavedLocation) {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+              setIsLocating(false);
+            },
+            (error) => {
+              console.warn('Geolocation ถูกปฏิเสธหรือไม่สามารถใช้งานได้', error);
+              setIsLocating(false);
+            },
+            { enableHighAccuracy: true }
+          );
+        } else {
+          setIsLocating(false);
+        }
+      }
+
       setIsAuthChecking(false);
     };
-    checkAuth();
+    checkAuthAndProfile();
   }, [items, router, supabase.auth, isSuccess, isMounted]); // เพิ่ม isMounted ใน Dependency Array
-
-  // ดึงตำแหน่งปัจจุบันของลูกค้า
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
-          setIsLocating(false);
-        },
-        (error) => {
-          console.warn('Geolocation ถูกปฏิเสธหรือไม่สามารถใช้งานได้', error);
-          setIsLocating(false); // ถ้าปฏิเสธ ให้ใช้ค่าเริ่มต้นแทน
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      setIsLocating(false);
-    }
-  }, []);
 
   // ดึงข้อมูลสาขาเพื่อเอารัศมีและพิกัด
   useEffect(() => {
@@ -210,7 +241,22 @@ export default function CheckoutPage() {
 
       if (itemsError) throw new Error(itemsError.message);
 
-      // 3. สำเร็จ: ล้างตะกร้าและเปลี่ยนหน้า
+      // 3. อัปเดตข้อมูลลูกค้าลงตาราง users และ LocalStorage สำหรับครั้งถัดไป
+      if (user?.id) {
+        await supabase
+          .from('users')
+          .update({
+            name: formData.name,
+            phone: formData.phone,
+            lat: location.lat.toString(),
+            lng: location.lng.toString()
+          })
+          .eq('id', user.id);
+        
+        localStorage.setItem('last_saved_address', formData.address);
+      }
+
+      // 4. สำเร็จ: ล้างตะกร้าและเปลี่ยนหน้า
       setIsSuccess(true); // เซ็ตค่าเป็น true เพื่อล็อกไม่ให้ useEffect เตะกลับหน้าแรก
       clearCart();
       router.push(`/checkout/success?orderId=${orderData.id}`); // แนบ orderId ไปด้วย

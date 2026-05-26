@@ -11,6 +11,7 @@ type DeliverySlot = {
   cut_off_hour: number;
   is_active: boolean;
   sort_order: number;
+  slot_type: string;
 };
 
 export default function DeliverySlotsPage() {
@@ -27,6 +28,7 @@ export default function DeliverySlotsPage() {
     cut_off_hour: 0,
     sort_order: 1,
     is_active: true,
+    slot_type: 'both',
   });
 
   const supabase = createBrowserClient(
@@ -66,6 +68,7 @@ export default function DeliverySlotsPage() {
       cut_off_hour: 12, // ค่าเริ่มต้น
       sort_order: slots.length > 0 ? Math.max(...slots.map(s => s.sort_order)) + 1 : 1,
       is_active: true,
+      slot_type: 'both',
     });
     setIsModalOpen(true);
   };
@@ -79,6 +82,7 @@ export default function DeliverySlotsPage() {
       cut_off_hour: slot.cut_off_hour,
       sort_order: slot.sort_order,
       is_active: slot.is_active,
+      slot_type: slot.slot_type || 'both',
     });
     setIsModalOpen(true);
   };
@@ -175,6 +179,7 @@ export default function DeliverySlotsPage() {
                   <th className="px-6 py-4 font-semibold w-16 text-center">ลำดับ</th>
                   <th className="px-6 py-4 font-semibold">ชื่อรอบจัดส่ง</th>
                   <th className="px-6 py-4 font-semibold">ช่วงเวลา</th>
+                  <th className="px-6 py-4 font-semibold text-center">ประเภท</th>
                   <th className="px-6 py-4 font-semibold text-center">เวลาตัดรอบ (Cut-off)</th>
                   <th className="px-6 py-4 font-semibold text-center">สถานะ</th>
                   <th className="px-6 py-4 font-semibold text-right">จัดการ</th>
@@ -191,6 +196,11 @@ export default function DeliverySlotsPage() {
                       <td className="px-6 py-4 text-center font-medium text-gray-900">{slot.sort_order}</td>
                       <td className="px-6 py-4 font-semibold text-gray-900">{slot.name}</td>
                       <td className="px-6 py-4 text-blue-600 font-medium">{slot.time_range}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`px-2 py-1 text-xs rounded-md font-medium ${!slot.slot_type || slot.slot_type === 'both' ? 'bg-purple-100 text-purple-700' : slot.slot_type === 'delivery' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {!slot.slot_type || slot.slot_type === 'both' ? 'ทั้งหมด' : slot.slot_type === 'delivery' ? 'เฉพาะจัดส่ง' : 'เฉพาะรับที่ร้าน'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 text-center">
                         {slot.cut_off_hour === 0 ? 'สั่งล่วงหน้าข้ามวันเท่านั้น' : `${slot.cut_off_hour.toString().padStart(2, '0')}:00 น.`}
                       </td>
@@ -248,6 +258,15 @@ export default function DeliverySlotsPage() {
                 <label className="block text-sm font-bold text-orange-800 mb-1 flex items-center gap-1.5"><AlertCircle className="w-4 h-4"/> เวลาตัดรอบ (Cut-off Hour)</label>
                 <p className="text-xs text-orange-600 mb-3 leading-relaxed">หากลูกค้าสั่งซื้อหลังจากชั่วโมงนี้ ระบบจะไม่อนุญาตให้เลือกรอบนี้สำหรับ "วันนี้" (เช่น ใส่ 12 หมายถึง สั่งหลังเที่ยงจะไม่สามารถเลือกรอบนี้เพื่อรับของวันนี้ได้)</p>
                 <input required type="number" min="0" max="24" value={formData.cut_off_hour} onChange={(e) => setFormData({...formData, cut_off_hour: parseInt(e.target.value)})} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none" placeholder="0-24" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ประเภทการใช้งาน <span className="text-red-500">*</span></label>
+                <select title="ประเภทการใช้งาน" value={formData.slot_type} onChange={(e) => setFormData({...formData, slot_type: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                  <option value="both">ใช้ได้ทั้ง 2 แบบ (จัดส่ง & รับที่ร้าน)</option>
+                  <option value="delivery">เฉพาะจัดส่งตามรอบ (Delivery)</option>
+                  <option value="pickup">เฉพาะรับที่ร้าน (Store Pickup)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">ใช้แยกตัวเลือกระหว่างรอบจัดส่งปกติ และเวลานัดรับที่ร้าน</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

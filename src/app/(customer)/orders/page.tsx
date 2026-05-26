@@ -18,10 +18,11 @@ type OrderItem = {
 type Order = {
     id: string;
     created_at: string;
-    status: 'pending' | 'batched' | 'delivered';
+    status: 'pending' | 'batched' | 'ready_for_pickup' | 'delivered';
     total_price: number;
     delivery_date?: string;
     delivery_slot?: string;
+    delivery_method?: 'delivery' | 'pickup';
     branches: { name: string };
     order_items: OrderItem[];
 };
@@ -76,6 +77,7 @@ export default function CustomerOrdersPage() {
           total_price,
           delivery_date,
           delivery_slot,
+          delivery_method,
           branches (name),
           order_items (
             quantity, 
@@ -97,12 +99,12 @@ export default function CustomerOrdersPage() {
     };
 
     // ฟังก์ชันช่วยแสดง UI สถานะ
-    const getStatusDisplay = (status: string) => {
+    const getStatusDisplay = (status: string, method?: string) => {
         switch (status) {
             case 'pending':
                 return (
                     <div className="flex items-center gap-1.5 text-orange-600 bg-orange-50 px-3 py-1.5 rounded-full text-sm font-semibold">
-                        <Clock className="w-4 h-4" /> รอดำเนินการ
+                        <Clock className="w-4 h-4" /> {method === 'pickup' ? 'รอจัดของลงถุง' : 'รอดำเนินการ'}
                     </div>
                 );
             case 'batched':
@@ -111,10 +113,16 @@ export default function CustomerOrdersPage() {
                         <Truck className="w-4 h-4" /> กำลังจัดส่ง
                     </div>
                 );
+            case 'ready_for_pickup':
+                return (
+                    <div className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full text-sm font-semibold animate-pulse">
+                        <Package className="w-4 h-4" /> รอรับที่ร้าน
+                    </div>
+                );
             case 'delivered':
                 return (
                     <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full text-sm font-semibold">
-                        <CheckCircle className="w-4 h-4" /> จัดส่งสำเร็จ
+                        <CheckCircle className="w-4 h-4" /> {method === 'pickup' ? 'รับสินค้าสำเร็จ' : 'จัดส่งสำเร็จ'}
                     </div>
                 );
             default:
@@ -172,7 +180,7 @@ export default function CustomerOrdersPage() {
                                             <div className="flex flex-wrap items-center gap-1.5 mt-3">
                                                 <span className="flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
                                                     <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                                                    จัดส่ง: {new Date(order.delivery_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                    {order.delivery_method === 'pickup' ? 'นัดรับ:' : 'จัดส่ง:'} {new Date(order.delivery_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}
                                                 </span>
                                                 {order.delivery_slot && slots.length > 0 && (
                                                     <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md shadow-sm">
@@ -184,9 +192,9 @@ export default function CustomerOrdersPage() {
                                         )}
                                     </div>
                                     <div className="flex flex-col sm:items-end gap-2">
-                                        {getStatusDisplay(order.status)}
+                                        {getStatusDisplay(order.status, order.delivery_method)}
                                         <div className="flex items-center gap-1 text-sm font-medium text-gray-600">
-                                            <MapPin className="w-4 h-4 text-gray-400" /> จัดส่งจาก: {order.branches?.name || 'ไม่ทราบสาขา'}
+                                            <MapPin className="w-4 h-4 text-gray-400" /> {order.delivery_method === 'pickup' ? 'รับที่สาขา:' : 'จัดส่งจาก:'} {order.branches?.name || 'ไม่ทราบสาขา'}
                                         </div>
                                     </div>
                                 </div>

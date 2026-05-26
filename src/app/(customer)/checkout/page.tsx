@@ -84,22 +84,11 @@ export default function CheckoutPage() {
   const todayObj = new Date();
   const todayStr = new Date(todayObj.getTime() - (todayObj.getTimezoneOffset() * 60 * 1000)).toISOString().split('T')[0];
 
-  // คำนวณ Cut-off time เบื้องต้นสำหรับ UI
+  // 1. ดึงข้อมูลรอบจัดส่งจาก Database
   useEffect(() => {
     const now = new Date();
-    const hour = now.getHours();
-    setCurrentHour(hour);
-    
-    const minDateObj = new Date(now);
-    if (hour >= 12) {
-      minDateObj.setDate(minDateObj.getDate() + 1); // สั่งหลังเที่ยง บังคับเริ่มวันพรุ่งนี้
-    }
-    
-    const offset = minDateObj.getTimezoneOffset();
-    const localDate = new Date(minDateObj.getTime() - (offset * 60 * 1000));
-    setMinDateStr(localDate.toISOString().split('T')[0]);
+    setCurrentHour(now.getHours());
 
-    // ดึงข้อมูลรอบจัดส่งจาก Database
     const fetchSlots = async () => {
       const { data } = await supabase
         .from('delivery_slots')
@@ -111,6 +100,40 @@ export default function CheckoutPage() {
     fetchSlots();
   }, []);
 
+  // 2. คำนวณวันที่เริ่มต้นที่เลือกได้ (minDate) ตามเวลาตัดรอบ (Cut-off) ของช่องทางที่เลือก
+  useEffect(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    
+    const minDateObj = new Date(now);
+    
+    // หารอบจัดส่งที่ตรงกับวิธีที่ลูกค้าเลือก
+    const relevantSlots = slots.filter(s => !s.slot_type || s.slot_type === 'both' || s.slot_type === deliveryMethod);
+    
+    // หาเวลาตัดรอบที่ช้าที่สุดของวิธีนั้นๆ (ถ้าไม่มีให้ใช้ 12)
+    let maxCutOff = 12;
+    if (relevantSlots.length > 0) {
+       maxCutOff = Math.max(...relevantSlots.map(s => s.cut_off_hour));
+    }
+
+    // หากเวลาปัจจุบัน เลยเวลาตัดรอบสุดท้ายของวันไปแล้ว ให้บังคับเริ่มเลือกวันพรุ่งนี้แทน
+    if (hour >= maxCutOff) {
+      minDateObj.setDate(minDateObj.getDate() + 1);
+    }
+    
+    const offset = minDateObj.getTimezoneOffset();
+    const localDate = new Date(minDateObj.getTime() - (offset * 60 * 1000));
+    const calculatedMinDate = localDate.toISOString().split('T')[0];
+    
+    setMinDateStr(calculatedMinDate);
+
+    // หากมีการเลือกวันที่ไว้แล้ว แต่วันที่เลือกน้อยกว่าที่ควรจะเป็น ให้รีเซ็ตค่า
+    if (deliveryDate && deliveryDate < calculatedMinDate) {
+      setDeliveryDate('');
+      setDeliverySlot('');
+    }
+  }, [slots, deliveryMethod, deliveryDate]);
+
   // รีเซ็ตรอบที่เลือกอัตโนมัติ ถ้าผู้ใช้คลิกเปลี่ยนมาเลือก "วันนี้" แล้วรอบนั้นเลยเวลาตัดรอบ (cut_off_hour) ไปแล้ว
   useEffect(() => {
     if (deliveryDate === todayStr && deliverySlot) {
@@ -119,7 +142,13 @@ export default function CheckoutPage() {
         setDeliverySlot('');
       }
     }
-  }, [deliveryDate, todayStr, currentHour, deliverySlot, slots]);
+    
+    // รีเซ็ตหากเปลี่ยนวิธีรับของแล้วรอบที่เลือกไว้ไม่รองรับ
+    const slotObj = slots.find(s => s.id === deliverySlot);
+    if (slotObj && slotObj.slot_type && slotObj.slot_type !== 'both' && slotObj.slot_type !== deliveryMethod) {
+      setDeliverySlot('');
+    }
+  }, [deliveryDate, todayStr, currentHour, deliverySlot, slots, deliveryMethod]);
 
   // ระบุว่าโหลดฝั่ง Client และกู้คืนข้อมูลตะกร้าเสร็จเรียบร้อยแล้ว
   useEffect(() => {
@@ -259,7 +288,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!activeBranchId) return alert('ไม่พบข้อมูลสาขา กรุณาเลือกสาขาใหม่');
     if (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) return alert('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
-    if (!deliveryDate || !deliverySlot) return alert('กรุณาเลือกวันที่และรอบการจัดส่ง');
+    if (!deliveryDate || !deliverySlot) return alert(deliveryMethod === 'delivery' ? 'กรุณาเลือกวันที่และรอบการจัดส่ง' : 'กรุณาเลือกวันที่และเวลาที่คาดว่าจะมารับสินค้า');
 
     setIsSubmitting(true);
 
@@ -276,7 +305,9 @@ export default function CheckoutPage() {
         .single();
 
       if (deliveryDate === todayStr && slotData && currentHour >= slotData.cut_off_hour) {
-        alert('ขออภัย รอบจัดส่งนี้ปิดรับออเดอร์สำหรับวันนี้แล้ว กรุณาเลือกรอบอื่นหรือเปลี่ยนวันจัดส่ง');
+        alert(deliveryMethod === 'delivery' 
+          ? 'ขออภัย รอบจัดส่งนี้ปิดรับออเดอร์สำหรับวันนี้แล้ว กรุณาเลือกรอบอื่นหรือเปลี่ยนวันจัดส่ง' 
+          : 'ขออภัย ช่วงเวลานี้ปิดรับออเดอร์แล้ว กรุณาเลือกเวลาอื่นหรือเปลี่ยนวันเข้ารับสินค้า');
         setIsSubmitting(false);
         return;
       }
@@ -337,6 +368,22 @@ export default function CheckoutPage() {
         
         if (deliveryMethod === 'delivery') {
           localStorage.setItem('last_saved_address', formData.address);
+        }
+      }
+
+      // --- แจ้งเตือนผ่าน Webhook ถ้ารับที่ร้านและมารับภายใน "วันนี้" ---
+      if (deliveryMethod === 'pickup' && deliveryDate === todayStr) {
+        try {
+          const slotName = slots.find(s => s.id === deliverySlot)?.name || 'ไม่ระบุเวลา';
+          const message = `\n🔔 มีลูกค้านัดรับที่ร้านวันนี้!\nออเดอร์: #${orderData.id.slice(0, 8).toUpperCase()}\nลูกค้า: ${formData.name}\nโทร: ${formData.phone}\nเวลานัดรับ: ${slotName}\nยอดสุทธิ: ฿${(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}`;
+          
+          await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+          });
+        } catch (err) {
+          console.error('Notify error:', err);
         }
       }
 
@@ -457,7 +504,7 @@ export default function CheckoutPage() {
                   <p className="text-sm text-gray-500">กำลังโหลดรอบจัดส่ง...</p>
                 ) : (
                   <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-                    {slots.map(slot => {
+                    {slots.filter(s => !s.slot_type || s.slot_type === 'both' || s.slot_type === deliveryMethod).map(slot => {
                       const isDisabled = deliveryDate === todayStr && currentHour >= slot.cut_off_hour;
                       return (
                         <label key={slot.id} className={`flex-1 min-w-[120px] flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === slot.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
@@ -471,8 +518,8 @@ export default function CheckoutPage() {
                     })}
                   </div>
                 )}
-                {deliveryDate === todayStr && slots.some(s => currentHour >= s.cut_off_hour) && (
-                  <p className="text-xs text-orange-600 mt-3 font-medium flex items-start gap-1"><AlertCircle className="w-4 h-4 shrink-0"/> บางรอบจัดส่งถูกปิดใช้งานสำหรับวันนี้ เนื่องจากเลยเวลาตัดรอบแล้ว</p>
+                {deliveryDate === todayStr && slots.filter(s => !s.slot_type || s.slot_type === 'both' || s.slot_type === deliveryMethod).some(s => currentHour >= s.cut_off_hour) && (
+                  <p className="text-xs text-orange-600 mt-3 font-medium flex items-start gap-1"><AlertCircle className="w-4 h-4 shrink-0"/> {deliveryMethod === 'delivery' ? 'บางรอบจัดส่งถูกปิดใช้งานสำหรับวันนี้ เนื่องจากเลยเวลาตัดรอบแล้ว' : 'บางช่วงเวลาไม่สามารถเข้ารับสินค้าได้ เนื่องจากเลยเวลาเตรียมสินค้าแล้ว'}</p>
                 )}
               </div>
             </div>

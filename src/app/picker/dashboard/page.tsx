@@ -98,7 +98,11 @@ export default function PickerDashboardPage() {
                                             <span className="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-full">รอบที่ {index + 1}</span>
                                             {batch.batch_status === 'preparing' && <span className="bg-orange-100 text-orange-600 text-xs font-bold px-3 py-1 rounded-full animate-pulse">กำลังจัดของ</span>}
                                         </div>
-                                        <span className="text-gray-400 text-xs flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {new Date(batch.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>
+                                        <span className="text-gray-500 text-xs flex items-center gap-1">
+                                            <Clock className="w-3.5 h-3.5" /> 
+                                            {new Date(batch.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} 
+                                            {' '}{new Date(batch.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
+                                        </span>
                                     </div>
                                     <div className="flex justify-between items-end">
                                         <h3 className="font-semibold text-gray-800 text-lg">รหัสรอบ: #{batch.id.slice(0, 6).toUpperCase()}</h3>

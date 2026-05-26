@@ -12,6 +12,7 @@ type Product = {
   price: number;
   image_url: string;
   category_id: string | null;
+  unit_id?: string | null;
   is_active?: boolean;
   is_track_stock?: boolean;
 };
@@ -29,6 +30,7 @@ export default function SuperAdminProductsPage() {
   // Master Data State
   const [categories, setCategories] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
 
   // Import Modal State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -49,6 +51,7 @@ export default function SuperAdminProductsPage() {
     price: '',
     image_url: '',
     category_id: '',
+    unit_id: '',
     is_track_stock: true,
   });
 
@@ -64,6 +67,8 @@ export default function SuperAdminProductsPage() {
     if (catData) setCategories(catData);
     const { data: branchData } = await supabase.from('branches').select('id');
     if (branchData) setBranches(branchData);
+    const { data: unitData } = await supabase.from('product_units').select('id, name').order('name');
+    if (unitData) setUnits(unitData);
   };
 
   const fetchProducts = async () => {
@@ -94,11 +99,12 @@ export default function SuperAdminProductsPage() {
         price: product.price ? String(product.price) : '',
         image_url: product.image_url || '',
         category_id: product.category_id || '',
+        unit_id: product.unit_id || '',
         is_track_stock: product.is_track_stock !== false,
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '', is_track_stock: false });
+      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '', unit_id: '', is_track_stock: false });
     }
     setIsModalOpen(true);
   };
@@ -168,6 +174,7 @@ export default function SuperAdminProductsPage() {
         price: parseFloat(formData.price),
         image_url: formData.image_url,
         category_id: formData.category_id || null,
+        unit_id: formData.unit_id || null,
         is_track_stock: formData.is_track_stock,
       };
 
@@ -280,11 +287,13 @@ export default function SuperAdminProductsPage() {
   const handleExport = () => {
     const exportData = products.map(p => {
       const cat = categories.find(c => c.id === p.category_id);
+      const unit = units.find(u => u.id === p.unit_id);
       return {
         ID: p.id,
         Name: p.name,
         Description: p.description || '',
         Price: p.price,
+        Unit_Name: unit ? unit.name : '',
         Category_Name: cat ? cat.name : '',
         Image_URL: p.image_url || '',
         Track_Stock: p.is_track_stock !== false ? 'Yes' : 'No'
@@ -304,6 +313,7 @@ export default function SuperAdminProductsPage() {
         Name: 'ชื่อสินค้าตัวอย่าง', 
         Description: 'รายละเอียดสินค้า', 
         Price: 150.50, 
+        Unit_Name: 'ชิ้น',
         Image_URL: 'https://example.com/img.jpg', 
         Category_Name: 'ของใช้', 
         Initial_Stock_Per_Branch: 10,
@@ -362,6 +372,16 @@ export default function SuperAdminProductsPage() {
             }
             category_id = cat.id;
           }
+
+          let unit_id = undefined;
+          if (row.Unit_Name) {
+            const unit = units.find(u => u.name === String(row.Unit_Name).trim());
+            if (!unit) {
+              errors.push(`แถวที่ ${rowNum}: ไม่พบหน่วยนับ "${row.Unit_Name}" ในระบบ`);
+              continue;
+            }
+            unit_id = unit.id;
+          }
         
         const is_track_stock = row.Track_Stock ? String(row.Track_Stock).trim().toLowerCase() !== 'no' : true;
 
@@ -379,6 +399,7 @@ export default function SuperAdminProductsPage() {
               price: row.Price !== undefined ? Number(row.Price) : existing.price,
               image_url: row.Image_URL !== undefined ? String(row.Image_URL).trim() : existing.image_url,
             category_id: category_id !== undefined ? category_id : existing.category_id,
+            unit_id: unit_id !== undefined ? unit_id : existing.unit_id,
             is_track_stock: row.Track_Stock !== undefined ? is_track_stock : existing.is_track_stock
             });
           } else {
@@ -390,6 +411,7 @@ export default function SuperAdminProductsPage() {
               price: Number(row.Price),
               image_url: row.Image_URL ? String(row.Image_URL).trim() : null,
               category_id: category_id || null,
+              unit_id: unit_id || null,
             _initialStock: initialStock,
             is_track_stock: is_track_stock
             });
@@ -648,19 +670,30 @@ export default function SuperAdminProductsPage() {
                 )}
               </div>
 
-              <div>
-                <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่สินค้า</label>
-                <select id="category_id" title="เลือกหมวดหมู่สินค้า" value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                  <option value="">-- ไม่ระบุหมวดหมู่ --</option>
-                  {rootCategories.map(cat => (
-                    <React.Fragment key={cat.id}>
-                      <option value={cat.id} className="font-semibold text-gray-800">{cat.name}</option>
-                      {getChildren(cat.id).map(child => (
-                        <option key={child.id} value={child.id}>&nbsp;&nbsp;&nbsp;↳ {child.name}</option>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่สินค้า</label>
+                  <select id="category_id" title="เลือกหมวดหมู่สินค้า" value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <option value="">-- ไม่ระบุหมวดหมู่ --</option>
+                    {rootCategories.map(cat => (
+                      <React.Fragment key={cat.id}>
+                        <option value={cat.id} className="font-semibold text-gray-800">{cat.name}</option>
+                        {getChildren(cat.id).map(child => (
+                          <option key={child.id} value={child.id}>&nbsp;&nbsp;&nbsp;↳ {child.name}</option>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="unit_id" className="block text-sm font-medium text-gray-700 mb-1">หน่วยนับ</label>
+                  <select id="unit_id" title="เลือกหน่วยนับ" value={formData.unit_id} onChange={(e) => setFormData({...formData, unit_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <option value="">-- ไม่ระบุหน่วยนับ --</option>
+                    {units.map(unit => (
+                      <option key={unit.id} value={unit.id} className="font-semibold text-gray-800">{unit.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>

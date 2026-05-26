@@ -22,6 +22,7 @@ type ProductRecord = {
   } | any;
 };
 
+
 type InventoryRecord = {
   stock_count: number;
   status: number;

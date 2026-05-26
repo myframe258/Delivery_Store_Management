@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
-import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart } from 'lucide-react';
-import AddToCartButton from '@/components/ui/AddToCartButton';
+import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart, Plus, Minus } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCartStore } from '@/store/cartStore';
@@ -42,6 +41,9 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
 
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
   const cartItems = useCartStore((state) => state.items || []);
+  const addItem = useCartStore((state: any) => state.addItem || state.addToCart);
+  const updateQuantity = useCartStore((state: any) => state.updateQuantity || state.updateItem);
+  const removeItem = useCartStore((state: any) => state.removeItem || state.removeFromCart);
   const branchCartItems = cartItems.filter((item) => item.branchId === branchId);
   
   // จัดการปัญหาทศนิยม (Floating Point Issue) ด้วยการปัดเศษ
@@ -223,19 +225,46 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-            {visibleProducts.map((product) => (
+            {visibleProducts.map((product) => {
+              // ลอจิกคำนวณสถานะสต็อกและตะกร้า
+              const isOutOfStock = product.is_track_stock !== false && product.stock_count <= 0;
+              const isLowStock = product.is_track_stock !== false && product.stock_count > 0 && product.stock_count < 5;
+              const cartItem = branchCartItems.find((item: any) => item.id === product.id);
+              const quantity = cartItem ? cartItem.quantity : 0;
+              const step = product.step_value || 1;
+              const min = product.min_value || 1;
+              const displayQuantity = Number.isInteger(quantity) ? quantity.toString() : quantity.toFixed(2).replace(/\.?0+$/, '');
+
+              return (
               <div 
                 key={product.id} 
-                className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col hover:shadow-lg hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 h-full group"
+                className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 h-full group relative ${isOutOfStock ? 'border-gray-200 opacity-80' : 'border-slate-200 hover:shadow-lg hover:border-blue-300 hover:-translate-y-1'}`}
               >
+                {/* Visual Badges (บ่งบอกประเภทหน่วยนับ) */}
+                <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                  {step < 1 ? (
+                    <span className="bg-blue-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">⚖️ ชั่งตามน้ำหนัก</span>
+                  ) : (
+                    <span className="bg-slate-800/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">📦 แพ็ก / ชิ้น</span>
+                  )}
+                </div>
+
                 <div className="w-full h-40 sm:h-48 bg-slate-50 relative flex-shrink-0 overflow-hidden">
+                  {/* Overlay กรณีสินค้าหมด */}
+                  {isOutOfStock && (
+                    <div className="absolute inset-0 bg-black/40 z-20 flex items-center justify-center backdrop-blur-[1px]">
+                      <span className="bg-red-600 text-white font-bold px-4 py-1.5 rounded-lg shadow-lg rotate-[-10deg] text-sm sm:text-base border-2 border-white">
+                        สินค้าหมด
+                      </span>
+                    </div>
+                  )}
                   {product.image_url ? (
                     <Image 
                       src={product.image_url} 
                       alt={product.name} 
                       fill 
                       sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-                      className="object-cover group-hover:scale-105 transition-transform duration-500" 
+                      className={`object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'group-hover:scale-105'}`} 
                     />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
@@ -253,34 +282,76 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                     {product.description || '-'}
                   </p>
                   
-                  <div className="mt-3 sm:mt-4 flex items-end justify-between mb-3 sm:mb-4">
-                    <span className="font-bold text-base sm:text-xl text-blue-600">
-                      ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
-                    </span>
-                    {product.is_track_stock !== false && (
-                      <span className="text-[10px] sm:text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md">
-                        คงเหลือ {product.stock_count} {product.unit_name || ''}
+                  <div className="mt-auto space-y-3 pt-3">
+                    <div className="flex items-end justify-between gap-1">
+                      <span className="font-bold text-base sm:text-xl text-blue-600 truncate">
+                        ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
                       </span>
+                      {product.is_track_stock !== false && (
+                        <span className={`shrink-0 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-md ${
+                          isOutOfStock ? 'text-red-700 bg-red-100' :
+                          isLowStock ? 'text-orange-700 bg-orange-100' :
+                          'text-emerald-700 bg-emerald-100'
+                        }`}>
+                          {isOutOfStock ? 'สินค้าหมด' : 
+                           isLowStock ? `ใกล้หมด! เหลือ ${product.stock_count} ${product.unit_name || ''}` : 
+                           `คงเหลือ ${product.stock_count} ${product.unit_name || ''}`}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Interactive UI: สลับสถานะปุ่มสั่งซื้อและจำนวน */}
+                    {isOutOfStock ? (
+                      <button disabled className="w-full bg-slate-100 text-slate-400 font-bold py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm cursor-not-allowed border border-slate-200">
+                        สินค้าหมด
+                      </button>
+                    ) : quantity > 0 ? (
+                      <div className="w-full flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl overflow-hidden h-9 sm:h-11 shadow-sm">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const nextQuantity = Number((quantity - step).toFixed(2));
+                            if (nextQuantity >= min) {
+                              updateQuantity(product.id, nextQuantity);
+                            } else {
+                              removeItem(product.id);
+                            }
+                          }}
+                          title="ลดจำนวน"
+                          className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"
+                        >
+                          <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                        <span className="font-bold text-sm sm:text-base text-blue-800 min-w-[2rem] px-1 text-center select-none">
+                          {displayQuantity}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            updateQuantity(product.id, Number((quantity + step).toFixed(2)));
+                          }}
+                          title="เพิ่มจำนวน"
+                          className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          addItem({ ...product, branchId, quantity: min });
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group"
+                      >
+                        <ShoppingCart className="w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-110 transition-transform" />
+                        <span>เพิ่มลงตะกร้า</span>
+                      </button>
                     )}
-                  </div>
-                  
-                  <div className="w-full mt-auto">
-                    <AddToCartButton 
-                      product={{
-                        id: product.id,
-                        name: product.name,
-                        price: product.price,
-                        image_url: product.image_url ?? undefined,
-                        unit_name: product.unit_name,
-                        step_value: product.step_value,
-                        min_value: product.min_value
-                      }} 
-                      branchId={branchId} 
-                    />
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
 

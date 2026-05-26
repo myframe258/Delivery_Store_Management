@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD) - Version 3
+# Product Requirements Document (PRD) - Version 4
 **Project Name:** Multi-Branch Store & Batch Delivery Management System  
 **Document Status:** Latest Production Draft
 
@@ -12,6 +12,7 @@
 ## 2. กลุ่มผู้ใช้งาน (Target Users)
 - **Super Admin (เจ้าของธุรกิจ):** จัดการภาพรวมระดับประเทศ เพิ่ม/ลบสาขา และจัดการบัญชีผู้ใช้งาน
 - **Branch Admin (ผู้จัดการสาขา):** จัดการรายการสินค้า เปิด-ปิดสถานะ อัปเดตสต็อก และวางแผนจัดรอบส่งของสาขาตนเอง
+- **Picker (พนักงานจัดของ):** ดูรอบการจัดส่ง และเตรียมสินค้าตามออเดอร์ที่ถูกจัดรอบไว้
 - **Driver/Rider (คนขับรถ):** ดูคิวงานจัดส่งตามลำดับที่ระบบคำนวณให้ และใช้นำทางไปยังจุดหมาย
 - **Customer (ลูกค้า):** ค้นหาสาขาใกล้บ้าน, เลือกซื้อสินค้า, ปักหมุดที่อยู่จัดส่ง, และติดตามสถานะออเดอร์
 
@@ -31,6 +32,7 @@
 - **Role-Based Redirect (การแยกเส้นทางหลัง Login):**
   เมื่อเข้าสู่ระบบสำเร็จ ระบบจะตรวจสอบสิทธิ์ (`role`) และเปลี่ยนหน้าอัตโนมัติ:
   - `branch_admin` ➔ เด้งไปหน้าจัดการสต็อกหลังบ้าน (`/branch-admin/inventory`) หรือหน้าจัดรอบส่ง
+  - `picker` ➔ เด้งไปหน้างานจัดเตรียมสินค้า (`/picker/dashboard`)
   - `rider` ➔ เด้งไปหน้างานจัดส่งของตนเอง (`/rider/batches`)
   - `customer` ➔ เด้งไปหน้า Checkout หรือหน้าติดตามออเดอร์
 
@@ -47,7 +49,10 @@
 ### 4.2 สำหรับ Admin (Management Dashboard)
 - **[Done 100%] Responsive Navbar:** แท็บเมนูสลับอัตโนมัติตาม Role ของผู้ใช้งาน รองรับ Mobile Layout อย่างสมบูรณ์ (SafeArea `pt-14`, `pb-16` ป้องกันการทับซ้อนของ UI)
 - **[Done 100%] Branch Admin Batching:** Interactive Map ที่ให้แอดมินลากหรือคลิกเลือกออเดอร์ที่ค้างส่งบนแผนที่ เพื่อสร้างเป็นรอบจัดส่ง (Batch) ได้ทันที
-- **[Pending] Super Admin Master Data:** หน้าจอ `/super-admin/*` สำหรับจัดการสาขา เพิ่มสินค้าส่วนกลาง และมอบหมาย Role ให้พนักงาน
+- **[Done 100%] Route Optimization API:** ระบบคำนวณเส้นทางและจัดลำดับจุดส่งอัตโนมัติด้วย Google Maps Directions API (TSP)
+- **[Done 100%] Branch Inventory:** ระบบให้ผู้จัดการสาขาอัปเดตสต็อกและสถานะเปิด/ปิดการขายสินค้า
+- **[Done 100%] Super Admin Products:** หน้าจอจัดการฐานข้อมูลสินค้าส่วนกลาง, นำเข้า/ส่งออกด้วย Excel (Bulk Update), อัปโหลดรูปขึ้น Storage และระบบ Soft Delete (`is_active`)
+- **[Pending] Super Admin Master Data (Branch & User):** หน้าจอเพิ่ม/ลบสาขา และกำหนด Role ผู้ใช้งาน
 
 ### 4.3 สำหรับคนขับ (Rider Interface)
 - **[Done 100%] Rider App:** หน้าจอ PWA ออกแบบเพื่อคนขับโดยเฉพาะ แสดงคิวส่งตามลำดับ (`sequence_no`)
@@ -57,19 +62,17 @@
 
 ## 5. แผนการพัฒนาใน Sprint ถัดไป (Next Sprints & Roadmap)
 
-**Sprint ถัดไป (High Priority): Route Optimization API**
-- สร้าง API (`/api/optimize-route`) เชื่อมต่อกับ Google Maps Directions API 
-- ใช้พารามิเตอร์ `optimize: true` เพื่อคำนวณและจัดลำดับจุดส่งที่สั้นที่สุด (TSP - Traveling Salesman Problem) 
-- นำลำดับที่จัดเรียงใหม่มาอัปเดตลงฟิลด์ `sequence_no` ให้คนขับแบบอัตโนมัติ
+**Sprint ถัดไป (High Priority): Order Tracking & Super Admin Management**
+- สร้างหน้าระบบหลังบ้านให้ Super Admin สามารถจัดการเพิ่ม/ลดสาขา (`/super-admin/branches`) ได้
+- สร้างหน้าระบบจัดการพนักงาน (`/super-admin/users`) สำหรับมอบหมายสิทธิ์ (Role) และสาขาที่สังกัดให้พนักงาน
+- พัฒนาหน้าติดตามสถานะออเดอร์สำหรับลูกค้า (Order Tracking) ให้เห็นความคืบหน้าแบบ Real-time
 
-**Sprint ถัดไป (Medium Priority): Branch Inventory Management**
-- พัฒนาหน้าระบบหลังบ้าน (`/branch-admin/inventory`) ให้แอดมินสาขาสามารถปรับลด/เพิ่มสต็อก
-- รองรับการตั้งค่า เปิด-ปิด (Active/Inactive) การขายสินค้าชนิดนั้นๆ เฉพาะสาขาตนเอง
+**Sprint ถัดไป (Medium Priority): Analytics & Dashboard**
+- เพิ่มหน้าต่างสรุปยอดขายและการจัดส่ง (Analytics) สำหรับ Branch Admin และ Super Admin
 
 **Technical Debt Clean-up (งานปรับปรุงโค้ดหลังบ้าน):**
-- ปรับแก้การดึงข้อมูล `price` และพิกัดจาก Database ที่เป็น String ให้กลายเป็น Numeric เพื่อให้คำนวณได้ถูกต้อง
 - ยกเลิกการใช้ `any` ใน TypeScript โดยดึงระบบ **Supabase Database Types** มาครอบตัวแปรทั้งหมดเพื่อรับประกัน Type Safety
-- นำระบบ **Row Level Security (RLS)** มาปรับใช้ในฐานข้อมูล เพื่อป้องกันการแอบแก้ไขข้อมูลข้ามสาขาผ่าน Client-side
+- ตรวจสอบ Row Level Security (RLS) เพิ่มเติมสำหรับตารางที่เกี่ยวข้องกับการเงินหรือการตั้งค่าสาขา
 
 ---
 
@@ -79,4 +82,5 @@
 - **Database & Auth:** Supabase (PostgreSQL) + `@supabase/ssr`
 - **State Management:** Zustand
 - **Maps & Routing:** Leaflet.js (`react-leaflet`), Google Maps Directions API
+- **Data Processing:** `xlsx` สำหรับนำเข้า/ส่งออกข้อมูล Excel
 - **Deployment Environment:** Vercel / Node.js Runtime

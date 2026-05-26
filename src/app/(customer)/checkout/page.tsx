@@ -6,7 +6,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
 import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
-import { Plus, Minus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info } from 'lucide-react';
 import Link from 'next/link';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
@@ -45,6 +45,9 @@ export default function CheckoutPage() {
   const [user, setUser] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isMounted, setIsMounted] = useState(false); // เพิ่ม State สำหรับรอโหลดข้อมูล
+  
+  // State สำหรับเก็บรูปแบบการรับสินค้า (Delivery / Pickup)
+  const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
 
   // State สำหรับเก็บข้อมูลลูกค้า
   const [formData, setFormData] = useState({
@@ -196,7 +199,7 @@ export default function CheckoutPage() {
       if (!activeBranchId) return;
       const { data } = await supabase
         .from('branches')
-        .select('lat, lng, service_radius')
+        .select('name, address, lat, lng, service_radius')
         .eq('id', activeBranchId)
         .single();
       if (data) setBranchData(data);
@@ -255,7 +258,7 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeBranchId) return alert('ไม่พบข้อมูลสาขา กรุณาเลือกสาขาใหม่');
-    if (distanceKm !== null && !isWithinRadius) return alert('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
+    if (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) return alert('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
     if (!deliveryDate || !deliverySlot) return alert('กรุณาเลือกวันที่และรอบการจัดส่ง');
 
     setIsSubmitting(true);
@@ -283,12 +286,19 @@ export default function CheckoutPage() {
         .insert({
           branch_id: Number(activeBranchId), // ตารางต้องการ bigint
           customer_id: user?.id, // บันทึกไอดีลูกค้าลง Database
-          total_price: getTotalPrice() + deliveryFee,
-          lat: location.lat,
-          lng: location.lng,
+          total_price: getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0),
+          lat: deliveryMethod === 'delivery' ? location.lat : null,
+          lng: deliveryMethod === 'delivery' ? location.lng : null,
           delivery_date: deliveryDate,
           delivery_slot: deliverySlot,
-          customer_info: { ...formData, delivery_fee: deliveryFee, distance_km: distanceKm }, // เก็บเป็น JSONB ตามโครงสร้าง Database
+          delivery_method: deliveryMethod, // เก็บรูปแบบการรับของ
+          customer_info: { 
+            name: formData.name,
+            phone: formData.phone,
+            address: deliveryMethod === 'delivery' ? formData.address : null,
+            delivery_fee: deliveryMethod === 'delivery' ? deliveryFee : 0, 
+            distance_km: deliveryMethod === 'delivery' ? distanceKm : null
+          }, 
           status: 'pending',
         })
         .select('id')
@@ -310,17 +320,24 @@ export default function CheckoutPage() {
 
       // 3. อัปเดตข้อมูลลูกค้าลงตาราง users และ LocalStorage สำหรับครั้งถัดไป
       if (user?.id) {
+        const userUpdate: any = {
+          name: formData.name,
+          phone: formData.phone,
+        };
+        
+        if (deliveryMethod === 'delivery') {
+          userUpdate.lat = location.lat.toString();
+          userUpdate.lng = location.lng.toString();
+        }
+        
         await supabase
           .from('users')
-          .update({
-            name: formData.name,
-            phone: formData.phone,
-            lat: location.lat.toString(),
-            lng: location.lng.toString()
-          })
+          .update(userUpdate)
           .eq('id', user.id);
         
-        localStorage.setItem('last_saved_address', formData.address);
+        if (deliveryMethod === 'delivery') {
+          localStorage.setItem('last_saved_address', formData.address);
+        }
       }
 
       // 4. สำเร็จ: ล้างตะกร้าและเปลี่ยนหน้า
@@ -345,37 +362,88 @@ export default function CheckoutPage() {
         
         {/* ฝั่งซ้าย: ฟอร์มที่อยู่ และ แผนที่ปักหมุด */}
         <div className="lg:col-span-2 space-y-6">
+
+          {/* เลือกวิธีการจัดส่ง */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-6">ข้อมูลสำหรับจัดส่ง</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-4">รูปแบบการรับสินค้า</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              <label className="relative cursor-pointer group">
+                <input 
+                  type="radio" 
+                  name="deliveryMethod" 
+                  value="delivery" 
+                  className="peer sr-only"
+                  checked={deliveryMethod === 'delivery'}
+                  onChange={() => setDeliveryMethod('delivery')}
+                />
+                <div className="p-4 rounded-xl border-2 border-gray-100 hover:bg-gray-50 peer-checked:border-blue-500 peer-checked:bg-blue-50 transition-all flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 peer-checked:text-blue-700">จัดส่งตามรอบ (Delivery)</h4>
+                    <p className="text-xs text-gray-500 mt-1">ให้พนักงานจัดส่งตามที่อยู่ที่คุณปักหมุดไว้</p>
+                  </div>
+                </div>
+              </label>
+
+              <label className="relative cursor-pointer group">
+                <input 
+                  type="radio" 
+                  name="deliveryMethod" 
+                  value="pickup" 
+                  className="peer sr-only"
+                  checked={deliveryMethod === 'pickup'}
+                  onChange={() => setDeliveryMethod('pickup')}
+                />
+                <div className="p-4 rounded-xl border-2 border-gray-100 hover:bg-gray-50 peer-checked:border-emerald-500 peer-checked:bg-emerald-50 transition-all flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 peer-checked:text-emerald-700">รับที่ร้าน (Store Pickup)</h4>
+                    <p className="text-xs text-gray-500 mt-1">มารับสินค้าด้วยตนเองที่สาขานี้</p>
+                  </div>
+                </div>
+              </label>
+
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-6">ข้อมูลผู้ติดต่อ</h2>
             
             <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อผู้รับ" />
+                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อ" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
                   <input required type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="08X-XXX-XXXX" />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (รายละเอียด)</label>
-                <textarea required name="address" value={formData.address} onChange={handleChange} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
-              </div>
+              {deliveryMethod === 'delivery' && (
+                <div className="animate-in fade-in zoom-in-95 duration-300 mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (รายละเอียด)</label>
+                  <textarea required name="address" value={formData.address} onChange={handleChange} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
+                </div>
+              )}
             </form>
           </div>
 
           {/* กล่องเลือกรอบจัดส่ง */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">เลือกรอบจัดส่งสินค้า</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-4">{deliveryMethod === 'delivery' ? 'เลือกรอบจัดส่งสินค้า' : 'เลือกเวลาเข้ามารับสินค้า'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">วันที่จัดส่ง</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'วันที่จัดส่ง' : 'วันที่เข้ารับสินค้า'}</label>
                 <input 
                   type="date" 
                   required
-                  title="เลือกวันที่ต้องการจัดส่ง"
+                  title="เลือกวันที่"
                   placeholder="วว/ดด/ปปปป"
                   min={minDateStr}
                   value={deliveryDate} 
@@ -384,7 +452,7 @@ export default function CheckoutPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">เวลารอบจัดส่ง</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'เวลารอบจัดส่ง' : 'เวลาที่คาดว่าจะมาถึง'}</label>
                 {slots.length === 0 ? (
                   <p className="text-sm text-gray-500">กำลังโหลดรอบจัดส่ง...</p>
                 ) : (
@@ -410,44 +478,64 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-2">ปักหมุดตำแหน่งจัดส่ง</h2>
-            <p className="text-sm text-gray-500 mb-6">เลื่อนหมุดสีน้ำเงินไปยังตำแหน่งที่ต้องการให้พนักงานไปส่งสินค้า</p>
-            <div className="relative min-h-[350px]">
-              {isLocating ? (
-                <div className="absolute inset-0 z-10 bg-slate-50 flex items-center justify-center rounded-xl border border-gray-100">
-                  <p className="text-blue-600 font-medium animate-pulse">📍 กำลังค้นหาตำแหน่งปัจจุบันของคุณ...</p>
-                </div>
-              ) : (
-                <CheckoutMap 
-                  initialPosition={[location.lat, location.lng]} 
-                  onLocationChange={(lat, lng) => setLocation({ lat, lng })} 
-                />
-              )}
-            </div>
+          {deliveryMethod === 'delivery' ? (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 animate-in fade-in zoom-in-95 duration-300">
+              <h2 className="text-xl font-bold text-slate-800 mb-2">ปักหมุดตำแหน่งจัดส่ง</h2>
+              <p className="text-sm text-gray-500 mb-6">เลื่อนหมุดสีน้ำเงินไปยังตำแหน่งที่ต้องการให้พนักงานไปส่งสินค้า</p>
+              <div className="relative min-h-[350px]">
+                {isLocating ? (
+                  <div className="absolute inset-0 z-10 bg-slate-50 flex items-center justify-center rounded-xl border border-gray-100">
+                    <p className="text-blue-600 font-medium animate-pulse">📍 กำลังค้นหาตำแหน่งปัจจุบันของคุณ...</p>
+                  </div>
+                ) : (
+                  <CheckoutMap 
+                    initialPosition={[location.lat, location.lng]} 
+                    onLocationChange={(lat, lng) => setLocation({ lat, lng })} 
+                  />
+                )}
+              </div>
 
-            {/* กล่องแจ้งเตือนระยะทาง */}
-            {distanceKm !== null && (
-              !isWithinRadius ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-3 items-start mt-4">
-                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="font-bold text-red-800 text-sm">อยู่นอกพื้นที่ให้บริการ</h3>
-                    <p className="text-red-600 text-xs mt-1">
-                      ระยะทาง {distanceKm.toFixed(2)} กม. (รัศมีบริการ {serviceRadius} กม.)
+              {/* กล่องแจ้งเตือนระยะทาง */}
+              {distanceKm !== null && (
+                !isWithinRadius ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-3 items-start mt-4">
+                    <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-bold text-red-800 text-sm">อยู่นอกพื้นที่ให้บริการ</h3>
+                      <p className="text-red-600 text-xs mt-1">
+                        ระยะทาง {distanceKm.toFixed(2)} กม. (รัศมีบริการ {serviceRadius} กม.)
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-3 items-center mt-4">
+                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                    <p className="text-green-800 text-sm font-medium">
+                      สามารถจัดส่งได้ (ระยะทาง: {distanceKm.toFixed(2)} กม.)
                     </p>
                   </div>
-                </div>
-              ) : (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex gap-3 items-center mt-4">
-                  <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
-                  <p className="text-green-800 text-sm font-medium">
-                    สามารถจัดส่งได้ (ระยะทาง: {distanceKm.toFixed(2)} กม.)
-                  </p>
-                </div>
-              )
-            )}
-          </div>
+                )
+              )}
+            </div>
+          ) : (
+            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 animate-in fade-in zoom-in-95 duration-300">
+              <h3 className="text-lg font-bold text-emerald-800 mb-4 flex items-center gap-2">
+                <Store className="w-5 h-5" /> ข้อมูลสาขาที่ต้องไปรับสินค้า
+              </h3>
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-emerald-100">
+                <p className="font-semibold text-gray-800 text-lg">{branchData?.name || 'กำลังโหลดข้อมูลสาขา...'}</p>
+                <p className="text-sm text-gray-600 mt-2 flex items-start gap-2">
+                  <MapPinIcon className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  {branchData?.address || 'ไม่พบที่อยู่สาขา'}
+                </p>
+              </div>
+              
+              <div className="mt-4 flex items-start gap-2 text-emerald-700 text-sm bg-emerald-100/50 p-3 rounded-lg">
+                <Info className="w-5 h-5 shrink-0" />
+                <p><strong>ข้อควรทราบ:</strong> กรุณามารับสินค้าภายในวันและเวลาที่เลือกรอบไว้ และแสดงหน้าประวัติคำสั่งซื้อให้พนักงานที่เคาน์เตอร์</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ฝั่งขวา: สรุปคำสั่งซื้อ (Order Summary) */}
@@ -492,12 +580,12 @@ export default function CheckoutPage() {
                 <span>฿{getTotalPrice().toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-              <span>ค่าจัดส่ง (ระยะทาง {distanceKm !== null ? distanceKm.toFixed(1) : 0} กม.)</span>
-              <span>{isCalculatingFee ? 'กำลังคำนวณ...' : `฿${deliveryFee.toLocaleString()}`}</span>
+              <span>ค่าจัดส่ง {deliveryMethod === 'delivery' ? `(ระยะทาง ${distanceKm !== null ? distanceKm.toFixed(1) : 0} กม.)` : ''}</span>
+              <span>{deliveryMethod === 'pickup' ? 'ไม่มีค่าจัดส่ง' : isCalculatingFee ? 'กำลังคำนวณ...' : `฿${deliveryFee.toLocaleString()}`}</span>
               </div>
               <div className="flex justify-between text-xl font-bold text-blue-600 pt-2 border-t border-gray-200">
                 <span>ยอดรวมทั้งสิ้น</span>
-              <span>฿{(getTotalPrice() + deliveryFee).toLocaleString()}</span>
+              <span>฿{(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</span>
               </div>
             </div>
 
@@ -514,9 +602,9 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 form="checkout-form"
-              disabled={isSubmitting || (distanceKm !== null && !isWithinRadius) || isCalculatingFee}
+              disabled={isSubmitting || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee)}
               className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${
-                (distanceKm !== null && !isWithinRadius) || isCalculatingFee ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
+                (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
                 }`}
               >
                 {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}

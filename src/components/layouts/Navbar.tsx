@@ -106,10 +106,17 @@ export default function Navbar() {
           )}
 
           {(role === 'branch_admin' || role === 'picker') && (
-            <Link href="/picker/dashboard" className="flex items-center gap-1 hover:text-blue-600 transition">
-              <Package className="w-4 h-4" /> งานจัดของ
-            </Link>
+            <>
+              <Link href="/picker/dashboard" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <Package className="w-4 h-4" /> งานจัดของ
+              </Link>
+              <Link href="/picker/pickups" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <Store className="w-4 h-4" /> ออเดอร์รับที่ร้าน
+              </Link>
+            </>
+
           )}
+
 
           {(role === 'branch_admin' || role === 'rider') && (
             <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">

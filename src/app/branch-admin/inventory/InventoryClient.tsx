@@ -104,7 +104,6 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
       }
 
       // อัปเดต UI เมื่อสำเร็จ
-      setInventory((prev) => ({ ...prev, [productId]: { ...editingProduct, stock_count: editStockValue } }));
       setInventory((prev) => prev.map(item => item.product_id === productId ? { ...item, stock_count: editStockValue } : item));
       setEditingProduct(null);
     } catch (error: any) {

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart } from 'lucide-react';
 import AddToCartButton from '@/components/ui/AddToCartButton';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCartStore } from '@/store/cartStore';
 
 interface Product {
@@ -32,12 +33,14 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
   const [isMounted, setIsMounted] = useState(false);
+  const [cartAnimation, setCartAnimation] = useState(false);
+  const [prevItemCount, setPrevItemCount] = useState(0);
 
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
-  const cartItems = useCartStore((state: any) => state.items || []);
-  const branchCartItems = cartItems.filter((item: any) => item.branchId === branchId);
-  const totalItems = branchCartItems.reduce((sum: number, item: any) => sum + item.quantity, 0);
-  const totalPrice = branchCartItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+  const cartItems = useCartStore((state) => state.items || []);
+  const branchCartItems = cartItems.filter((item) => item.branchId === branchId);
+  const totalItems = branchCartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = branchCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   // รีเซ็ตจำนวนที่แสดงผลเมื่อเปลี่ยนหมวดหมู่หรือค้นหา
   useEffect(() => {
@@ -47,18 +50,37 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   // ป้องกันหน้าเว็บกระตุก (Hydration Mismatch) ระหว่าง Server กับ Client
   useEffect(() => {
     setIsMounted(true);
+    setPrevItemCount(totalItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ดักจับเมื่อจำนวนสินค้าเพิ่มขึ้น เพื่อเล่นแอนิเมชัน (เช่น หยิบลงตะกร้า)
+  useEffect(() => {
+    if (isMounted && totalItems > prevItemCount) {
+      setCartAnimation(true);
+      // ปิดแอนิเมชันหลังจาก 500ms
+      const timer = setTimeout(() => {
+        setCartAnimation(false);
+      }, 500);
+      setPrevItemCount(totalItems);
+      return () => clearTimeout(timer);
+    } else if (totalItems !== prevItemCount) {
+      setPrevItemCount(totalItems);
+    }
+  }, [totalItems, prevItemCount, isMounted]);
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // กรองสินค้าแบบเรียลไทม์
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchCategory = selectedCategory ? p.category_id === selectedCategory : true;
       const matchSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
+        p.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (p.description?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ?? false);
       return matchCategory && matchSearch;
     });
-  }, [products, selectedCategory, searchQuery]);
+  }, [products, selectedCategory, deferredSearchQuery]);
 
   // สินค้าที่จะแสดงตามจำนวน Load More
   const visibleProducts = filteredProducts.slice(0, visibleCount);
@@ -201,7 +223,13 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
               >
                 <div className="w-full h-40 sm:h-48 bg-slate-50 relative flex-shrink-0 overflow-hidden">
                   {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <Image 
+                      src={product.image_url} 
+                      alt={product.name} 
+                      fill 
+                      sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-500" 
+                    />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
                       <Package className="w-8 h-8 mb-2 opacity-50" />
@@ -255,16 +283,33 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
         )}
       </main>
 
+      {/* --- Desktop: Cart Notification Toast --- */}
+      {isMounted && (
+        <div 
+          className={`hidden lg:flex fixed top-24 right-8 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl shadow-lg z-50 transition-all duration-300 items-center gap-3 ${
+            cartAnimation ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="bg-emerald-100 p-2 rounded-full">
+            <ShoppingCart className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-emerald-900">หยิบสินค้าลงตะกร้าแล้ว</p>
+            <p className="text-xs text-emerald-700 mt-0.5">ยอดรวม {totalItems} ชิ้น (฿{totalPrice.toLocaleString()})</p>
+          </div>
+        </div>
+      )}
+
       {/* --- Floating Cart Button (Mobile & Tablet) --- */}
       {isMounted && totalItems > 0 && (
         // ใช้ pointer-events-none ที่ container เพื่อให้กดทะลุพื้นที่ว่างได้ แต่ใช้ auto กับตัว Link
         <div className="lg:hidden fixed bottom-6 left-0 right-0 px-4 sm:px-6 z-50 pointer-events-none">
-          <Link href={`/checkout`} className="pointer-events-auto block max-w-md mx-auto">
-            <div className="bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-600/40 p-4 flex items-center justify-between active:scale-95 transition-transform duration-200">
+          <Link href={`/checkout?branchId=${branchId}`} className="pointer-events-auto block max-w-md mx-auto">
+            <div className={`bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-600/40 p-4 flex items-center justify-between active:scale-95 transition-all duration-300 ${cartAnimation ? 'scale-105 ring-4 ring-blue-400/40 bg-blue-500' : 'scale-100'}`}>
               <div className="flex items-center gap-4">
                 <div className="relative flex-shrink-0">
-                  <ShoppingCart className="w-6 h-6" />
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                  <ShoppingCart className={`w-6 h-6 ${cartAnimation ? 'animate-bounce' : ''}`} />
+                  <span className={`absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
                     {totalItems}
                   </span>
                 </div>

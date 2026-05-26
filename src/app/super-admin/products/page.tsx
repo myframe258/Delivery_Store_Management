@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Package, Plus, Edit2, Trash2, X, Image as ImageIcon, UploadCloud, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, X, Image as ImageIcon, UploadCloud, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, PowerOff } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 type Product = {
@@ -12,6 +12,7 @@ type Product = {
   price: number;
   image_url: string;
   category_id: string | null;
+  is_active?: boolean;
 };
 
 export default function SuperAdminProductsPage() {
@@ -38,6 +39,7 @@ export default function SuperAdminProductsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -68,6 +70,7 @@ export default function SuperAdminProductsPage() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
+        .eq('is_active', true)
         .order('name');
 
       if (error) throw error;
@@ -102,6 +105,55 @@ export default function SuperAdminProductsPage() {
     setEditingId(null);
   };
 
+  // ฟังก์ชันสำหรับอัปโหลดรูปภาพขึ้น Supabase Storage
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      // สุ่มชื่อไฟล์ใหม่เพื่อป้องกันชื่อซ้ำกัน
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // อัปโหลดไปยัง Bucket ชื่อ 'products'
+      const { error: uploadError } = await supabase.storage
+        .from('products')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // ดึง Public URL ของไฟล์ที่เพิ่งอัปโหลด
+      const { data: { publicUrl } } = supabase.storage
+        .from('products')
+        .getPublicUrl(filePath);
+
+      setFormData({ ...formData, image_url: publicUrl });
+    } catch (error: any) {
+      console.error('Upload error:', error.message);
+      alert(`เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: ${error.message}`);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // ฟังก์ชันสำหรับลบไฟล์รูปภาพออกจาก Supabase Storage
+  const deleteImageFromStorage = async (imageUrl: string | null) => {
+    if (!imageUrl) return;
+    try {
+      // ตัดเอาเฉพาะชื่อไฟล์ที่ต่อท้าย /public/products/ ออกมา
+      const urlParts = imageUrl.split('/public/products/');
+      if (urlParts.length === 2) {
+        const filePath = urlParts[1];
+        const { error } = await supabase.storage.from('products').remove([filePath]);
+        if (error) console.error('Error removing image from storage:', error.message);
+      }
+    } catch (err) {
+      console.error('Error parsing image URL:', err);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -117,11 +169,19 @@ export default function SuperAdminProductsPage() {
 
       if (editingId) {
         // Update Existing Product
+        const existingProduct = products.find(p => p.id === editingId);
+
         const { error } = await supabase
           .from('products')
           .update(payload)
           .eq('id', editingId);
         if (error) throw error;
+
+        // หากมีการเปลี่ยนรูปภาพ (URL ไม่ตรงกับของเดิม) ให้ลบรูปเก่าออกจาก Storage ทิ้ง
+        if (existingProduct?.image_url && existingProduct.image_url !== payload.image_url) {
+          await deleteImageFromStorage(existingProduct.image_url);
+        }
+
         alert('อัปเดตข้อมูลสินค้าสำเร็จ');
       } else {
         // Insert New Product
@@ -160,15 +220,46 @@ export default function SuperAdminProductsPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบสินค้า "${name}" ?\nข้อมูลที่ผูกกับสาขาต่างๆ อาจได้รับผลกระทบ`)) {
+  // ฟังก์ชันสำหรับระงับการขายสินค้านี้ในทุกสาขาทันที
+  const handleDisableGlobally = async (id: string, name: string) => {
+    if (!window.confirm(`ยืนยันการ "ระงับการขาย" สินค้า "${name}" ในทุกสาขาใช่หรือไม่?\nสถานะสินค้าในทุกสาขาจะถูกเปลี่ยนเป็นปิดการขายทันที`)) {
       return;
     }
 
     try {
       const { error } = await supabase
-        .from('products')
+        .from('branch_inventory')
+        .update({ status: 0 })
+        .eq('product_id', id);
+        
+      if (error) throw error;
+      
+      alert(`ระงับการขายสินค้า "${name}" ในทุกสาขาเรียบร้อยแล้ว`);
+    } catch (error: any) {
+      console.error('Error disabling product globally:', error.message);
+      alert('ไม่สามารถอัปเดตสถานะในสาขาได้: ' + error.message);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบสินค้า "${name}" ?\nข้อมูลสต็อกที่ผูกกับสาขาต่างๆ จะถูกลบทิ้งทั้งหมด`)) {
+      return;
+    }
+
+    try {
+      const productToDelete = products.find(p => p.id === id);
+
+      // 1. ลบจากสต็อกของทุกสาขาก่อนเพื่อป้องกัน Foreign Key Constraint Error
+      const { error: invError } = await supabase
+        .from('branch_inventory')
         .delete()
+        .eq('product_id', id);
+      if (invError) throw invError;
+
+      // 2. ซ่อนสินค้า (Soft Delete) แทนการลบออกจากตาราง products หลัก
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: false })
         .eq('id', id);
         
       if (error) throw error;
@@ -181,10 +272,30 @@ export default function SuperAdminProductsPage() {
     }
   };
 
+  // ฟังก์ชันดาวน์โหลดข้อมูลปัจจุบัน (Export) สำหรับนำไปแก้ไขและอัปเดต
+  const handleExport = () => {
+    const exportData = products.map(p => {
+      const cat = categories.find(c => c.id === p.category_id);
+      return {
+        ID: p.id,
+        Name: p.name,
+        Description: p.description || '',
+        Price: p.price,
+        Category_Name: cat ? cat.name : '',
+        Image_URL: p.image_url || ''
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    XLSX.writeFile(wb, `Products_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   // ฟังก์ชันดาวน์โหลด Template Excel
   const downloadTemplate = () => {
     const ws = XLSX.utils.json_to_sheet([
       { 
+        ID: '', // ปล่อยว่างเพื่อเพิ่มสินค้าใหม่
         Name: 'ชื่อสินค้าตัวอย่าง', 
         Description: 'รายละเอียดสินค้า', 
         Price: 150.50, 
@@ -217,23 +328,26 @@ export default function SuperAdminProductsPage() {
         const data = XLSX.utils.sheet_to_json(ws);
 
         const errors: string[] = [];
-        const validProducts: any[] = [];
+        const productsToInsert: any[] = [];
+        const productsToUpdate: any[] = [];
 
         // 1. Data Parsing & Validation
         for (let i = 0; i < data.length; i++) {
           const row: any = data[i];
           const rowNum = i + 2; // +2 เพราะ index เริ่ม 0 และมี Header ในแถวแรก
 
-          if (!row.Name || String(row.Name).trim() === '') {
-            errors.push(`แถวที่ ${rowNum}: ข้อมูล "ชื่อสินค้า" ห้ามว่าง`);
+          const id = row.ID ? String(row.ID).trim() : null;
+
+          if (!id && (!row.Name || String(row.Name).trim() === '')) {
+            errors.push(`แถวที่ ${rowNum}: ข้อมูล "ชื่อสินค้า" ห้ามว่าง (สำหรับการเพิ่มใหม่)`);
             continue;
           }
-          if (isNaN(Number(row.Price)) || Number(row.Price) < 0) {
+          if (row.Price !== undefined && (isNaN(Number(row.Price)) || Number(row.Price) < 0)) {
             errors.push(`แถวที่ ${rowNum}: "ราคา" ต้องเป็นตัวเลขที่มากกว่าหรือเท่ากับ 0`);
             continue;
           }
 
-          let category_id = null;
+          let category_id = undefined;
           if (row.Category_Name) {
             const cat = categories.find(c => c.name === String(row.Category_Name).trim());
             if (!cat) {
@@ -243,16 +357,33 @@ export default function SuperAdminProductsPage() {
             category_id = cat.id;
           }
 
-          const initialStock = isNaN(Number(row.Initial_Stock_Per_Branch)) ? 0 : Number(row.Initial_Stock_Per_Branch);
-
-          validProducts.push({
-            name: String(row.Name).trim(),
-            description: row.Description ? String(row.Description).trim() : '',
-            price: Number(row.Price),
-            image_url: row.Image_URL ? String(row.Image_URL).trim() : null,
-            category_id: category_id,
-            _initialStock: initialStock
-          });
+          if (id) {
+            // โหมดอัปเดตข้อมูลเดิม (Upsert)
+            const existing = products.find(p => p.id === id);
+            if (!existing) {
+              errors.push(`แถวที่ ${rowNum}: ไม่พบสินค้ารหัส ${id} ในระบบ (ไม่สามารถอัปเดตได้)`);
+              continue;
+            }
+            productsToUpdate.push({
+              id: id,
+              name: row.Name !== undefined ? String(row.Name).trim() : existing.name,
+              description: row.Description !== undefined ? String(row.Description).trim() : existing.description,
+              price: row.Price !== undefined ? Number(row.Price) : existing.price,
+              image_url: row.Image_URL !== undefined ? String(row.Image_URL).trim() : existing.image_url,
+              category_id: category_id !== undefined ? category_id : existing.category_id
+            });
+          } else {
+            // โหมดเพิ่มข้อมูลใหม่ (Insert)
+            const initialStock = isNaN(Number(row.Initial_Stock_Per_Branch)) ? 0 : Number(row.Initial_Stock_Per_Branch);
+            productsToInsert.push({
+              name: String(row.Name).trim(),
+              description: row.Description ? String(row.Description).trim() : null,
+              price: Number(row.Price),
+              image_url: row.Image_URL ? String(row.Image_URL).trim() : null,
+              category_id: category_id || null,
+              _initialStock: initialStock
+            });
+          }
         }
 
         if (errors.length > 0) {
@@ -261,38 +392,44 @@ export default function SuperAdminProductsPage() {
           return; // หากมี Error แม้แต่แถวเดียว จะยกเลิกการนำเข้าทั้งหมดเพื่อความปลอดภัย
         }
 
-        if (validProducts.length === 0) {
+        if (productsToInsert.length === 0 && productsToUpdate.length === 0) {
           setImportErrors(['ไม่พบข้อมูลสินค้าที่ถูกต้องในไฟล์']);
           setIsImporting(false);
           return;
         }
 
-        // 2. Supabase Bulk Insertion: ตาราง products
-        const productsToInsert = validProducts.map(({ _initialStock, ...rest }) => rest);
-        const { data: insertedProducts, error: insertError } = await supabase
-          .from('products')
-          .insert(productsToInsert)
-          .select('id, name');
-
-        if (insertError) throw insertError;
-
-        // 3. Supabase Bulk Insertion: ตาราง branch_inventory (แยกตามสาขา)
-        if (insertedProducts && branches.length > 0) {
-          const inventoryPayload = insertedProducts.flatMap((insertedProduct, index) => {
-            const initialStock = validProducts[index]._initialStock;
-            return branches.map(branch => ({
-              branch_id: branch.id,
-              product_id: insertedProduct.id,
-              stock_count: initialStock,
-              status: initialStock > 0 ? 1 : 0 // ถ้าใส่สต็อกมาให้เลย จะปรับให้สถานะเปิดขายอัตโนมัติ
-            }));
-          });
-
-          const { error: invError } = await supabase.from('branch_inventory').insert(inventoryPayload);
-          if (invError) console.error("Inventory Insert Error:", invError.message);
+        // 2. อัปเดตข้อมูลเดิม (Upsert) ถ้ามีการแก้ไขมาจากไฟล์ Export
+        if (productsToUpdate.length > 0) {
+          const { error: updateError } = await supabase.from('products').upsert(productsToUpdate);
+          if (updateError) throw updateError;
         }
 
-        setImportSuccessCount(validProducts.length);
+        // 3. เพิ่มข้อมูลใหม่ (Insert) ถ้าในไฟล์ไม่มีระบุ ID
+        if (productsToInsert.length > 0) {
+          const insertPayload = productsToInsert.map(({ _initialStock, ...rest }) => rest);
+          const { data: insertedProducts, error: insertError } = await supabase
+            .from('products')
+            .insert(insertPayload)
+            .select('id');
+
+          if (insertError) throw insertError;
+
+          if (insertedProducts && branches.length > 0) {
+            const inventoryPayload = insertedProducts.flatMap((insertedProduct, index) => {
+              const initialStock = productsToInsert[index]._initialStock;
+              return branches.map(branch => ({
+                branch_id: branch.id,
+                product_id: insertedProduct.id,
+                stock_count: initialStock,
+                status: initialStock > 0 ? 1 : 0
+              }));
+            });
+            const { error: invError } = await supabase.from('branch_inventory').insert(inventoryPayload);
+            if (invError) console.error("Inventory Insert Error:", invError.message);
+          }
+        }
+
+        setImportSuccessCount(productsToInsert.length + productsToUpdate.length);
         fetchProducts(); // Refresh ตาราง
 
       } catch (err: any) {
@@ -327,6 +464,13 @@ export default function SuperAdminProductsPage() {
           <p className="text-gray-500 mt-1">เพิ่ม แก้ไข หรือลบสินค้าส่วนกลางสำหรับทุกสาขา (Super Admin)</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
+          <button
+            onClick={handleExport}
+            className="flex-1 md:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-5 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
+          >
+            <Download className="w-5 h-5" />
+            ส่งออก (Excel)
+          </button>
           <button
             onClick={() => setIsImportModalOpen(true)}
             className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
@@ -387,9 +531,26 @@ export default function SuperAdminProductsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={4} className="text-center py-12 text-gray-500 animate-pulse">กำลังโหลดข้อมูลสินค้า...</td>
-                </tr>
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <tr key={`skeleton-${idx}`} className="border-b border-gray-50">
+                    <td className="px-6 py-4 text-center">
+                      <div className="w-12 h-12 rounded-lg bg-gray-200 animate-pulse mx-auto"></div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 bg-gray-200 rounded-md w-3/4 mb-2 animate-pulse"></div>
+                      <div className="h-3 bg-gray-100 rounded-md w-1/2 animate-pulse"></div>
+                    </td>
+                    <td className="px-6 py-4 text-right flex justify-end">
+                      <div className="h-4 bg-gray-200 rounded-md w-16 animate-pulse"></div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2">
+                        <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
+                        <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="text-center py-12 text-gray-500">
@@ -420,6 +581,9 @@ export default function SuperAdminProductsPage() {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-2">
+                        <button onClick={() => handleDisableGlobally(product.id, product.name)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="ระงับการขายทุกสาขา">
+                          <PowerOff className="w-4 h-4" />
+                        </button>
                         <button onClick={() => openModal(product)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสินค้า">
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -451,7 +615,24 @@ export default function SuperAdminProductsPage() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">ชื่อสินค้า <span className="text-red-500">*</span></label><input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น น้ำดื่มขวด 1.5 ลิตร" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียด</label><textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="คำอธิบายสินค้า..." /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label><input required type="number" step="0.01" min="0" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น 15.50" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">URL รูปภาพสินค้า</label><input type="url" value={formData.image_url} onChange={(e) => setFormData({...formData, image_url: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://example.com/image.jpg" /></div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รูปภาพสินค้า</label>
+                <div className="flex gap-2">
+                  <input type="url" value={formData.image_url} onChange={(e) => setFormData({...formData, image_url: e.target.value})} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://... หรืออัปโหลดไฟล์" />
+                  <label className={`flex items-center justify-center px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-200 transition-colors ${isUploadingImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {isUploadingImage ? <Loader2 className="w-5 h-5 animate-spin text-slate-500" /> : <UploadCloud className="w-5 h-5 text-slate-600" />}
+                    <span className="ml-2 text-sm font-medium text-slate-700 hidden sm:inline-block">{isUploadingImage ? 'กำลังอัปโหลด...' : 'อัปโหลด'}</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
+                  </label>
+                </div>
+                {formData.image_url && (
+                  <div className="mt-3 w-28 h-28 rounded-lg border border-gray-200 overflow-hidden relative bg-gray-50 flex items-center justify-center">
+                    <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่สินค้า</label>
                 <select id="category_id" title="เลือกหมวดหมู่สินค้า" value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
@@ -484,8 +665,9 @@ export default function SuperAdminProductsPage() {
             <div className="p-6 flex flex-col gap-6">
               <div className="flex justify-between items-center bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                 <div className="text-sm text-blue-800">
-                  <span className="font-semibold block mb-1">คำแนะนำ:</span>
-                  คุณสามารถดาวน์โหลดไฟล์ตัวอย่าง เพื่อกรอกข้อมูลให้ตรงตามฟอร์แมตก่อนอัปโหลดเข้าสู่ระบบ
+                  <span className="font-semibold block mb-1">คำแนะนำการนำเข้า/อัปเดต:</span>
+                  - <span className="font-medium">เพิ่มสินค้าใหม่:</span> ดาวน์โหลด Template และปล่อยช่อง ID ว่างไว้<br/>
+                  - <span className="font-medium">อัปเดตราคา:</span> กดปุ่ม "ส่งออก (Excel)" ด้านนอก แก้ไขราคา แล้วนำมาอัปโหลดที่นี่
                 </div>
                 <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors shadow-sm shrink-0">
                   <Download className="w-4 h-4" /> ดาวน์โหลด Template
@@ -507,8 +689,8 @@ export default function SuperAdminProductsPage() {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
                   <CheckCircle className="w-6 h-6 text-emerald-600" />
                   <div>
-                    <h3 className="font-bold text-emerald-800">นำเข้าข้อมูลสำเร็จ!</h3>
-                    <p className="text-emerald-600 text-sm">เพิ่มสินค้าใหม่และกระจ่ายสต็อกลงสาขาสำเร็จจำนวน {importSuccessCount} รายการ</p>
+                    <h3 className="font-bold text-emerald-800">ประมวลผลข้อมูลสำเร็จ!</h3>
+                    <p className="text-emerald-600 text-sm">อัปเดตข้อมูลและเพิ่มสินค้าใหม่สำเร็จทั้งหมด {importSuccessCount} รายการ</p>
                   </div>
                 </div>
               )}

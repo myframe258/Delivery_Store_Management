@@ -12,6 +12,7 @@ type OrderItem = {
     products: {
         name: string;
         image_url: string;
+        product_units?: { name: string } | any;
     };
 };
 
@@ -82,7 +83,11 @@ export default function CustomerOrdersPage() {
           order_items (
             quantity, 
             price_at_purchase,
-            products (name, image_url)
+            products (
+              name, 
+              image_url,
+              product_units (name)
+            )
           )
         `)
                 .eq('customer_id', session.user.id)
@@ -201,7 +206,13 @@ export default function CustomerOrdersPage() {
 
                                 <div className="p-5">
                                     <div className="space-y-4">
-                                        {order.order_items.map((item, index) => (
+                                        {order.order_items.map((item, index) => {
+                                            const qty = Number(item.quantity);
+                                            const displayQty = Number.isInteger(qty) ? qty : qty.toFixed(2).replace(/\.?0+$/, '');
+                                            const unit = Array.isArray(item.products?.product_units) ? item.products.product_units[0] : item.products?.product_units;
+                                            const unitName = unit?.name || '';
+
+                                            return (
                                             <div key={index} className="flex items-start gap-4">
                                                 <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-100 flex items-center justify-center">
                                                     {item.products?.image_url ? (
@@ -213,12 +224,12 @@ export default function CustomerOrdersPage() {
                                                 <div className="flex-1">
                                                     <h4 className="font-semibold text-gray-800 line-clamp-1">{item.products?.name || 'สินค้าไม่มีชื่อ'}</h4>
                                                     <div className="flex justify-between items-center mt-1">
-                                                        <span className="text-sm text-gray-500">จำนวน: {item.quantity} ชิ้น</span>
+                                                        <span className="text-sm text-gray-500">จำนวน: {displayQty} {unitName}</span>
                                                         <span className="font-medium text-gray-900">฿{(item.price_at_purchase * item.quantity).toLocaleString()}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
 
                                     <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">

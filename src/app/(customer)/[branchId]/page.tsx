@@ -15,6 +15,11 @@ type ProductRecord = {
   image_url: string | null;
   category_id: string | null;
   is_track_stock?: boolean;
+  product_units?: {
+    name: string;
+    step_value: number;
+    min_value: number;
+  } | any;
 };
 
 type InventoryRecord = {
@@ -56,7 +61,12 @@ export default async function BranchStorefrontPage({
         price,
         image_url,
         category_id,
-        is_track_stock
+        is_track_stock,
+        product_units (
+          name,
+          step_value,
+          min_value
+        )
       )
     `)
     .eq('branch_id', branchId)
@@ -78,6 +88,8 @@ export default async function BranchStorefrontPage({
       return null;
     }
 
+    const unit = Array.isArray(prod.product_units) ? prod.product_units[0] : prod.product_units;
+
     return {
       id: prod.id,
       name: prod.name || '',
@@ -87,6 +99,9 @@ export default async function BranchStorefrontPage({
       category_id: prod.category_id || null,
       stock_count: item.stock_count,
       is_track_stock: prod.is_track_stock !== false,
+      unit_name: unit?.name,
+      step_value: unit?.step_value ? Number(unit.step_value) : undefined,
+      min_value: unit?.min_value ? Number(unit.min_value) : undefined,
     };
   }).filter((p): p is NonNullable<typeof p> => p !== null) || [];
 

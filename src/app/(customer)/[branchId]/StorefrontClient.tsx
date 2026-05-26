@@ -16,6 +16,9 @@ interface Product {
   category_id: string | null;
   stock_count: number;
   is_track_stock?: boolean;
+  unit_name?: string;
+  step_value?: number;
+  min_value?: number;
 }
 
 interface Category {
@@ -40,8 +43,11 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
   const cartItems = useCartStore((state) => state.items || []);
   const branchCartItems = cartItems.filter((item) => item.branchId === branchId);
-  const totalItems = branchCartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = branchCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  // จัดการปัญหาทศนิยม (Floating Point Issue) ด้วยการปัดเศษ
+  const totalItems = Number(branchCartItems.reduce((sum, item) => sum + item.quantity, 0).toFixed(2));
+  const totalPrice = Number(branchCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2));
+  const formatNumber = (num: number) => Number.isInteger(num) ? num.toString() : num.toFixed(2).replace(/\.?0+$/, '');
 
   // รีเซ็ตจำนวนที่แสดงผลเมื่อเปลี่ยนหมวดหมู่หรือค้นหา
   useEffect(() => {
@@ -248,10 +254,12 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                   </p>
                   
                   <div className="mt-3 sm:mt-4 flex items-end justify-between mb-3 sm:mb-4">
-                    <span className="font-bold text-base sm:text-xl text-blue-600">฿{product.price.toLocaleString()}</span>
+                    <span className="font-bold text-base sm:text-xl text-blue-600">
+                      ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
+                    </span>
                     {product.is_track_stock !== false && (
                       <span className="text-[10px] sm:text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md">
-                        คงเหลือ {product.stock_count}
+                        คงเหลือ {product.stock_count} {product.unit_name || ''}
                       </span>
                     )}
                   </div>
@@ -262,7 +270,10 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                         id: product.id,
                         name: product.name,
                         price: product.price,
-                        image_url: product.image_url ?? undefined
+                        image_url: product.image_url ?? undefined,
+                        unit_name: product.unit_name,
+                        step_value: product.step_value,
+                        min_value: product.min_value
                       }} 
                       branchId={branchId} 
                     />
@@ -298,7 +309,7 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
           </div>
           <div>
             <p className="text-sm font-bold text-emerald-900">หยิบสินค้าลงตะกร้าแล้ว</p>
-            <p className="text-xs text-emerald-700 mt-0.5">ยอดรวม {totalItems} ชิ้น (฿{totalPrice.toLocaleString()})</p>
+            <p className="text-xs text-emerald-700 mt-0.5">ยอดรวม {formatNumber(totalItems)} รายการ (฿{totalPrice.toLocaleString()})</p>
           </div>
         </div>
       )}
@@ -312,8 +323,8 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
               <div className="flex items-center gap-4">
                 <div className="relative flex-shrink-0">
                   <ShoppingCart className={`w-6 h-6 ${cartAnimation ? 'animate-bounce' : ''}`} />
-                  <span className={`absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
-                    {totalItems}
+                  <span className={`absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full border-2 border-white transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
+                    {formatNumber(totalItems)}
                   </span>
                 </div>
                 <div className="flex flex-col">

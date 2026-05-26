@@ -8,6 +8,9 @@ interface ProductProps {
   name: string;
   price: number;
   image_url?: string;
+  unit_name?: string;
+  step_value?: number;
+  min_value?: number;
 }
 
 interface AddToCartButtonProps {
@@ -28,11 +31,16 @@ export default function AddToCartButton({ product, branchId }: AddToCartButtonPr
   );
   const quantity = existingItem ? existingItem.quantity : 0;
 
+  // ดึงค่ามาจาก Master Data ถ้าไม่มีให้ใช้ค่าเริ่มต้นเป็น 1
+  const step = product.step_value || 1;
+  const min = product.min_value || 1;
+
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (addItem) {
-      addItem({ ...product, branchId, quantity: 1 });
+      // ครั้งแรกที่หยิบลงตะกร้า ให้เริ่มที่ค่า min เสมอ
+      addItem({ ...product, branchId, quantity: min });
     } else {
       alert('ฟังก์ชันเพิ่มลงตะกร้ายังไม่พร้อมใช้งาน');
     }
@@ -42,19 +50,29 @@ export default function AddToCartButton({ product, branchId }: AddToCartButtonPr
     e.preventDefault();
     e.stopPropagation();
     if (updateQuantity) {
-      updateQuantity(product.id, quantity + 1);
+      // ใช้ toFixed(2) แล้วแปลงกลับเป็น Number เพื่อป้องกันปัญหาทศนิยมเพี้ยน (เช่น 0.1 + 0.2)
+      const nextQuantity = Number((quantity + step).toFixed(2));
+      updateQuantity(product.id, nextQuantity);
     }
   };
 
   const handleDecrease = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (quantity > 1 && updateQuantity) {
-      updateQuantity(product.id, quantity - 1);
-    } else if (quantity === 1 && removeItem) {
+    if (quantity > min && updateQuantity) {
+      const nextQuantity = Number((quantity - step).toFixed(2));
+      // ตรวจสอบเผื่อว่ากดลบแล้วค่าน้อยกว่าค่าขั้นต่ำ ให้ถือว่าเป็นการลบออกจากตะกร้า
+      if (nextQuantity >= min) {
+        updateQuantity(product.id, nextQuantity);
+      } else if (removeItem) {
+        removeItem(product.id);
+      }
+    } else if (quantity <= min && removeItem) {
       removeItem(product.id);
     }
   };
+
+  const displayQuantity = Number.isInteger(quantity) ? quantity.toString() : quantity.toFixed(2).replace(/\.?0+$/, '');
 
   // กรณีที่มีสินค้าในตะกร้าแล้ว -> แสดงปุ่มปรับจำนวน (+ / -)
   if (quantity > 0) {
@@ -67,8 +85,8 @@ export default function AddToCartButton({ product, branchId }: AddToCartButtonPr
         >
           <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
-        <span className="font-bold text-sm sm:text-base text-blue-800 w-8 text-center select-none">
-          {quantity}
+        <span className="font-bold text-sm sm:text-base text-blue-800 min-w-[2rem] px-1 text-center select-none">
+          {displayQuantity}
         </span>
         <button
           onClick={handleIncrease}

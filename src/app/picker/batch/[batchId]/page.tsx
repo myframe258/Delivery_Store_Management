@@ -7,7 +7,7 @@ import { ArrowLeft, Check, CheckSquare, Package, ShoppingBag, ListTodo, CheckCir
 import Link from 'next/link';
 
 // --- Types ---
-type Product = { id: string; name: string; image_url: string };
+type Product = { id: string; name: string; image_url: string; product_units?: { name: string } | any };
 type OrderItem = { id: string; quantity: number; products: Product };
 type Order = { id: string; order_code: string; customer_info: { name: string }; order_items: OrderItem[] };
 type BatchItem = { id: string; orders: Order };
@@ -15,10 +15,14 @@ type DeliveryBatch = { id: string; batch_status: string; batch_items: BatchItem[
 
 // Aggregated Type for Pick List
 type PickListItem = {
+    id: string; // เปลี่ยนมาใช้ Custom ID เพื่อรองรับการแยกทศนิยม
     productId: string;
     name: string;
     image_url: string;
     totalQuantity: number;
+    unit_name: string;
+    isDecimal: boolean;
+    bagCount: number;
 };
 
 export default function PickerBatchDetailPage() {
@@ -61,7 +65,9 @@ export default function PickerBatchDetailPage() {
                             id, order_code, customer_info,
                             order_items (
                                 id, quantity,
-                                products ( id, name, image_url )
+                                products ( id, name, image_url,
+                                    product_units (name)
+                                )
                             )
                         )
                     )
@@ -88,14 +94,33 @@ export default function PickerBatchDetailPage() {
         batch.batch_items.forEach(bi => {
             bi.orders?.order_items?.forEach(oi => {
                 const pId = oi.products.id;
-                if (itemMap.has(pId)) {
-                    itemMap.get(pId)!.totalQuantity += oi.quantity;
+                const qty = Number(oi.quantity);
+                const unit = Array.isArray(oi.products.product_units) ? oi.products.product_units[0] : oi.products.product_units;
+                const unitName = unit?.name || '';
+                
+                // ตรวจสอบว่าเป็นทศนิยมหรือไม่
+                const isDecimal = !Number.isInteger(qty);
+                
+                // ถ้าเป็นทศนิยม ให้แยก Key ตามน้ำหนัก (เช่น id_0.5) แต่ถ้าเป็นชิ้นเต็ม ให้ใช้ productId ปกติ
+                const mapKey = isDecimal ? `${pId}_${qty}` : pId;
+
+                if (itemMap.has(mapKey)) {
+                    const existing = itemMap.get(mapKey)!;
+                    if (isDecimal) {
+                        existing.bagCount += 1; // นับเพิ่มจำนวน "ถุง"
+                    } else {
+                        existing.totalQuantity += qty; // บวกจำนวน "ชิ้น" ตามปกติ
+                    }
                 } else {
-                    itemMap.set(pId, {
+                    itemMap.set(mapKey, {
+                        id: mapKey,
                         productId: pId,
                         name: oi.products.name,
                         image_url: oi.products.image_url,
-                        totalQuantity: oi.quantity
+                        totalQuantity: qty,
+                        unit_name: unitName,
+                        isDecimal: isDecimal,
+                        bagCount: 1
                     });
                 }
             });
@@ -104,8 +129,8 @@ export default function PickerBatchDetailPage() {
     }, [batch]);
 
     // --- Actions ---
-    const togglePick = (productId: string) => {
-        setPickedProducts(prev => ({ ...prev, [productId]: !prev[productId] }));
+    const togglePick = (itemId: string) => {
+        setPickedProducts(prev => ({ ...prev, [itemId]: !prev[itemId] }));
     };
 
     const togglePack = (orderItemId: string) => {
@@ -155,23 +180,23 @@ export default function PickerBatchDetailPage() {
         <div className="min-h-screen bg-gray-50 pt-14 pb-24 md:pt-16 md:pb-0 relative">
             {/* Header */}
             <div className="bg-white border-b border-gray-200 sticky top-[56px] md:top-[64px] z-20">
-                <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
-                    <Link href="/picker/dashboard" className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 active:scale-95 transition">
+                <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+                    <Link href="/picker/dashboard" className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 active:scale-95 transition shrink-0">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
-                    <div className="flex-1">
-                        <h1 className="text-xl font-bold text-gray-900 line-clamp-1">รอบจัดส่ง #{batch.id.slice(0, 8).toUpperCase()}</h1>
-                        <p className="text-sm text-blue-600 font-medium">{batch.batch_items.length} ออเดอร์ที่ต้องจัด</p>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-lg font-bold text-gray-900 truncate">รอบจัดส่ง #{batch.id.slice(0, 8).toUpperCase()}</h1>
+                        <p className="text-xs text-blue-600 font-medium">{batch.batch_items.length} ออเดอร์ที่ต้องจัด</p>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex px-4 max-w-3xl mx-auto border-t border-gray-100">
-                    <button onClick={() => setActiveTab('pick')} className={`flex-1 flex justify-center items-center gap-2 py-4 border-b-2 font-medium transition ${activeTab === 'pick' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'}`}>
-                        <ListTodo className="w-5 h-5" /> 1. รายการหยิบรวม
+                <div className="flex max-w-3xl mx-auto border-t border-gray-100 bg-white">
+                    <button onClick={() => setActiveTab('pick')} className={`flex-1 flex justify-center items-center gap-2 py-3 border-b-2 font-medium text-sm transition ${activeTab === 'pick' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}>
+                        <ListTodo className="w-4 h-4 sm:w-5 sm:h-5" /> 1. รายการหยิบรวม
                     </button>
-                    <button onClick={() => setActiveTab('pack')} className={`flex-1 flex justify-center items-center gap-2 py-4 border-b-2 font-medium transition ${activeTab === 'pack' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400'}`}>
-                        <Package className="w-5 h-5" /> 2. แยกตามออเดอร์
+                    <button onClick={() => setActiveTab('pack')} className={`flex-1 flex justify-center items-center gap-2 py-3 border-b-2 font-medium text-sm transition ${activeTab === 'pack' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}>
+                        <Package className="w-4 h-4 sm:w-5 sm:h-5" /> 2. แยกตามออเดอร์
                     </button>
                 </div>
             </div>
@@ -188,21 +213,34 @@ export default function PickerBatchDetailPage() {
                         </div>
 
                         {pickList.map(item => {
-                            const isPicked = pickedProducts[item.productId];
+                            const isPicked = pickedProducts[item.id];
                             return (
-                                <div key={item.productId} onClick={() => togglePick(item.productId)} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.98] cursor-pointer ${isPicked ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 shadow-sm'}`}>
-                                    {/* Big Touch Target Checkbox */}
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border-2 transition-colors ${isPicked ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
-                                        {isPicked && <Check className="w-5 h-5 text-white" />}
+                                <div key={item.id} onClick={() => togglePick(item.id)} className={`flex items-center gap-3 p-3 sm:p-4 rounded-2xl border transition-all active:scale-[0.98] cursor-pointer select-none ${isPicked ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 shadow-sm'}`}>
+                                    {/* Touch Target Checkbox */}
+                                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 border-2 transition-colors ${isPicked ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                        {isPicked && <Check className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
                                     </div>
-                                    <div className="w-14 h-14 bg-white rounded-lg border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
-                                        {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" /> : <ShoppingBag className="w-6 h-6 text-gray-300" />}
+                                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-lg border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                                        {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" /> : <ShoppingBag className="w-5 h-5 text-gray-300" />}
                                     </div>
-                                    <div className="flex-1">
-                                        <h3 className={`font-semibold text-lg line-clamp-1 ${isPicked ? 'text-green-800 line-through opacity-70' : 'text-gray-900'}`}>{item.name}</h3>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className={`font-semibold text-sm sm:text-base leading-tight line-clamp-2 ${isPicked ? 'text-green-800 line-through opacity-70' : 'text-gray-900'}`}>
+                                            {item.name}
+                                        </h3>
+                                        {item.isDecimal && <span className={`text-xs font-medium mt-1 block ${isPicked ? 'text-green-700/70' : 'text-gray-500'}`}>({item.totalQuantity} {item.unit_name})</span>}
                                     </div>
-                                    <div className="shrink-0 text-center">
-                                        <span className={`block text-2xl font-black ${isPicked ? 'text-green-600' : 'text-blue-600'}`}>x{item.totalQuantity}</span>
+                                    <div className="shrink-0 text-right ml-1">
+                                        {item.isDecimal ? (
+                                            <>
+                                                <span className={`block text-xl sm:text-2xl font-black ${isPicked ? 'text-green-600' : 'text-blue-600'}`}>{item.bagCount}</span>
+                                                <span className={`block text-[10px] sm:text-xs font-medium mt-0.5 text-right ${isPicked ? 'text-green-600/70' : 'text-gray-500'}`}>ถุง(แพ็ค)</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className={`block text-xl sm:text-2xl font-black ${isPicked ? 'text-green-600' : 'text-blue-600'}`}>{item.totalQuantity}</span>
+                                                {item.unit_name && <span className={`block text-[10px] sm:text-xs font-medium mt-0.5 text-right ${isPicked ? 'text-green-600/70' : 'text-gray-500'}`}>{item.unit_name}</span>}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -230,15 +268,22 @@ export default function PickerBatchDetailPage() {
                                     <div className="divide-y divide-gray-50">
                                         {order?.order_items?.map(oi => {
                                             const isPacked = packedOrderItems[oi.id];
+                                            const unit = Array.isArray(oi.products?.product_units) ? oi.products.product_units[0] : oi.products?.product_units;
+                                            const unitName = unit?.name || '';
+                                            const displayQty = Number.isInteger(Number(oi.quantity)) ? Number(oi.quantity) : Number(oi.quantity).toFixed(2).replace(/\.?0+$/, '');
+
                                             return (
-                                                <div key={oi.id} onClick={() => togglePack(oi.id)} className={`flex items-center gap-4 p-4 transition-colors cursor-pointer active:bg-gray-50 ${isPacked ? 'bg-green-50/50' : ''}`}>
-                                                    <div className={`w-7 h-7 rounded flex items-center justify-center shrink-0 border-2 transition ${isPacked ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-transparent'}`}>
-                                                        <CheckSquare className="w-5 h-5" />
+                                                <div key={oi.id} onClick={() => togglePack(oi.id)} className={`flex items-center gap-3 p-3 sm:p-4 transition-colors cursor-pointer select-none active:bg-gray-50 ${isPacked ? 'bg-green-50/50' : ''}`}>
+                                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded flex items-center justify-center shrink-0 border-2 transition ${isPacked ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-transparent'}`}>
+                                                        <CheckSquare className="w-4 h-4 sm:w-5 sm:h-5" />
                                                     </div>
-                                                    <div className="flex-1">
-                                                        <p className={`text-sm font-medium ${isPacked ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{oi.products?.name}</p>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className={`text-sm font-medium leading-tight line-clamp-2 ${isPacked ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{oi.products?.name}</p>
                                                     </div>
-                                                    <div className={`text-lg font-bold ${isPacked ? 'text-gray-400' : 'text-slate-800'}`}>x{oi.quantity}</div>
+                                                    <div className={`text-right shrink-0 ml-2 ${isPacked ? 'text-gray-400' : 'text-slate-800'}`}>
+                                                        <span className="text-base sm:text-lg font-bold">{displayQty}</span>
+                                                        {unitName && <span className="text-[10px] sm:text-xs ml-1 font-medium">{unitName}</span>}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
@@ -252,13 +297,13 @@ export default function PickerBatchDetailPage() {
 
             {/* Bottom Floating Action Bar */}
             {activeTab === 'pack' && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 md:static md:bg-transparent md:border-none md:p-0 md:max-w-3xl md:mx-auto md:mt-8 z-30 pb-safe">
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:static md:bg-transparent md:border-none md:p-0 md:shadow-none md:max-w-3xl md:mx-auto md:mt-8 z-30 pb-safe">
                     <button 
                         onClick={handleCompleteBatch}
                         disabled={!isAllPacked || isSubmitting}
-                        className={`w-full py-4 rounded-2xl text-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isAllPacked ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                        className={`w-full py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isAllPacked ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                     >
-                        {isSubmitting ? 'กำลังบันทึก...' : <><CheckCircle2 className="w-6 h-6" /> เตรียมสินค้าเสร็จสิ้น</>}
+                        {isSubmitting ? 'กำลังบันทึก...' : <><CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> เตรียมสินค้าเสร็จสิ้น</>}
                     </button>
                 </div>
             )}

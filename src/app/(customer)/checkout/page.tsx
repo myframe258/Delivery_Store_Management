@@ -591,12 +591,17 @@ export default function CheckoutPage() {
             <h2 className="text-xl font-bold text-slate-800 mb-6">สรุปคำสั่งซื้อ</h2>
 
             <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
-              {items.map((item) => (
+              {items.map((item: any) => {
+                const step = item.step_value || 1;
+                const min = item.min_value || 1;
+                const displayQuantity = Number.isInteger(item.quantity) ? item.quantity.toString() : item.quantity.toFixed(2).replace(/\.?0+$/, '');
+                
+                return (
                 <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
                   <div className="flex justify-between items-start">
                     <div className="flex-1 pr-4">
                       <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
-                      <div className="text-sm font-semibold text-blue-600 mt-1">฿{item.price.toLocaleString()}</div>
+                      <div className="text-sm font-semibold text-blue-600 mt-1">฿{item.price.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</div>
                     </div>
                     <div className="font-semibold text-gray-800">
                       ฿{(item.price * item.quantity).toLocaleString()}
@@ -605,11 +610,18 @@ export default function CheckoutPage() {
                   {/* ส่วนควบคุมจำนวนสินค้า */}
                   <div className="flex items-center justify-between mt-3">
                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 w-fit">
-                      <button type="button" title="ลดจำนวน" onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                      <button type="button" title="ลดจำนวน" onClick={() => {
+                        const nextQuantity = Number((item.quantity - step).toFixed(2));
+                        if (nextQuantity >= min) {
+                          updateQuantity(item.id, nextQuantity);
+                        } else {
+                          removeItem(item.id);
+                        }
+                      }} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
                         <Minus className="w-4 h-4" />
                       </button>
-                      <span className="w-6 text-center font-semibold text-sm">{item.quantity}</span>
-                      <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                      <span className="min-w-[1.5rem] px-1 text-center font-semibold text-sm">{displayQuantity}</span>
+                      <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, Number((item.quantity + step).toFixed(2)))} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
@@ -618,7 +630,7 @@ export default function CheckoutPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-3 mb-6">

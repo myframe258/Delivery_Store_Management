@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Package, Plus, Edit2, Trash2, X, Image as ImageIcon, UploadCloud, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, PowerOff } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -13,6 +13,7 @@ type Product = {
   image_url: string;
   category_id: string | null;
   is_active?: boolean;
+  is_track_stock?: boolean;
 };
 
 export default function SuperAdminProductsPage() {
@@ -48,6 +49,7 @@ export default function SuperAdminProductsPage() {
     price: '',
     image_url: '',
     category_id: '',
+    is_track_stock: true,
   });
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export default function SuperAdminProductsPage() {
 
   const fetchMasterData = async () => {
     // ดึงหมวดหมู่ และ สาขามาเก็บไว้สำหรับการ Map ข้อมูลตอน Bulk Upload
-    const { data: catData } = await supabase.from('categories').select('id, name');
+    const { data: catData } = await supabase.from('categories').select('id, name, parent_id').order('sort_order', { ascending: true });
     if (catData) setCategories(catData);
     const { data: branchData } = await supabase.from('branches').select('id');
     if (branchData) setBranches(branchData);
@@ -92,10 +94,11 @@ export default function SuperAdminProductsPage() {
         price: product.price ? String(product.price) : '',
         image_url: product.image_url || '',
         category_id: product.category_id || '',
+        is_track_stock: product.is_track_stock !== false,
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '' });
+      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '', is_track_stock: true });
     }
     setIsModalOpen(true);
   };
@@ -165,6 +168,7 @@ export default function SuperAdminProductsPage() {
         price: parseFloat(formData.price),
         image_url: formData.image_url,
         category_id: formData.category_id || null,
+        is_track_stock: formData.is_track_stock,
       };
 
       if (editingId) {
@@ -282,7 +286,8 @@ export default function SuperAdminProductsPage() {
         Description: p.description || '',
         Price: p.price,
         Category_Name: cat ? cat.name : '',
-        Image_URL: p.image_url || ''
+        Image_URL: p.image_url || '',
+        Track_Stock: p.is_track_stock !== false ? 'Yes' : 'No'
       };
     });
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -301,7 +306,8 @@ export default function SuperAdminProductsPage() {
         Price: 150.50, 
         Image_URL: 'https://example.com/img.jpg', 
         Category_Name: 'ของใช้', 
-        Initial_Stock_Per_Branch: 10 
+        Initial_Stock_Per_Branch: 10,
+        Track_Stock: 'Yes'
       }
     ]);
     const wb = XLSX.utils.book_new();
@@ -356,6 +362,8 @@ export default function SuperAdminProductsPage() {
             }
             category_id = cat.id;
           }
+        
+        const is_track_stock = row.Track_Stock ? String(row.Track_Stock).trim().toLowerCase() !== 'no' : true;
 
           if (id) {
             // โหมดอัปเดตข้อมูลเดิม (Upsert)
@@ -370,7 +378,8 @@ export default function SuperAdminProductsPage() {
               description: row.Description !== undefined ? String(row.Description).trim() : existing.description,
               price: row.Price !== undefined ? Number(row.Price) : existing.price,
               image_url: row.Image_URL !== undefined ? String(row.Image_URL).trim() : existing.image_url,
-              category_id: category_id !== undefined ? category_id : existing.category_id
+            category_id: category_id !== undefined ? category_id : existing.category_id,
+            is_track_stock: row.Track_Stock !== undefined ? is_track_stock : existing.is_track_stock
             });
           } else {
             // โหมดเพิ่มข้อมูลใหม่ (Insert)
@@ -381,7 +390,8 @@ export default function SuperAdminProductsPage() {
               price: Number(row.Price),
               image_url: row.Image_URL ? String(row.Image_URL).trim() : null,
               category_id: category_id || null,
-              _initialStock: initialStock
+            _initialStock: initialStock,
+            is_track_stock: is_track_stock
             });
           }
         }
@@ -452,6 +462,11 @@ export default function SuperAdminProductsPage() {
     ? products.filter(p => p.category_id === selectedCategory)
     : products;
 
+  // ฟังก์ชันแยกหมวดหมู่หลักและย่อย
+  const rootCategories = categories.filter(c => !c.parent_id);
+  const getChildren = (parentId: string) => categories.filter(c => c.parent_id === parentId);
+  const orderedCategories = rootCategories.flatMap(cat => [cat, ...getChildren(cat.id)]);
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8">
       {/* Header */}
@@ -501,7 +516,7 @@ export default function SuperAdminProductsPage() {
           >
             ทั้งหมด
           </button>
-          {categories.map((cat) => (
+          {orderedCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
@@ -511,7 +526,7 @@ export default function SuperAdminProductsPage() {
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700'
             }`}
           >
-            {cat.name}
+            {cat.parent_id ? `↳ ${cat.name}` : cat.name}
           </button>
           ))}
         </div>
@@ -637,8 +652,29 @@ export default function SuperAdminProductsPage() {
                 <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่สินค้า</label>
                 <select id="category_id" title="เลือกหมวดหมู่สินค้า" value={formData.category_id} onChange={(e) => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                   <option value="">-- ไม่ระบุหมวดหมู่ --</option>
-                  {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  {rootCategories.map(cat => (
+                    <React.Fragment key={cat.id}>
+                      <option value={cat.id} className="font-semibold text-gray-800">{cat.name}</option>
+                      {getChildren(cat.id).map(child => (
+                        <option key={child.id} value={child.id}>&nbsp;&nbsp;&nbsp;↳ {child.name}</option>
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="flex items-center cursor-pointer gap-2 mt-2">
+                  <div className="relative">
+                    <input type="checkbox" className="sr-only" checked={formData.is_track_stock} onChange={(e) => setFormData({...formData, is_track_stock: e.target.checked})} />
+                    <div className={`block w-10 h-6 rounded-full transition-colors ${formData.is_track_stock ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${formData.is_track_stock ? 'transform translate-x-4' : ''}`}></div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-800">นับสต็อกสินค้า (Track Stock)</span>
+                    <span className="text-xs text-gray-500">ปิดหากเป็นสินค้าที่ไม่มีวันหมด หรือไม่ต้องการจัดการจำนวน</span>
+                  </div>
+                </label>
               </div>
               
               <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">

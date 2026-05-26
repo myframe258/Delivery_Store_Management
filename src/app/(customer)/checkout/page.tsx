@@ -45,7 +45,7 @@ export default function CheckoutPage() {
   const [user, setUser] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isMounted, setIsMounted] = useState(false); // เพิ่ม State สำหรับรอโหลดข้อมูล
-  
+
   // State สำหรับเก็บรูปแบบการรับสินค้า (Delivery / Pickup)
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
 
@@ -104,27 +104,27 @@ export default function CheckoutPage() {
   useEffect(() => {
     const now = new Date();
     const hour = now.getHours();
-    
+
     const minDateObj = new Date(now);
-    
+
     // หารอบจัดส่งที่ตรงกับวิธีที่ลูกค้าเลือก
     const relevantSlots = slots.filter(s => !s.slot_type || s.slot_type === 'both' || s.slot_type === deliveryMethod);
-    
+
     // หาเวลาตัดรอบที่ช้าที่สุดของวิธีนั้นๆ (ถ้าไม่มีให้ใช้ 12)
     let maxCutOff = 12;
     if (relevantSlots.length > 0) {
-       maxCutOff = Math.max(...relevantSlots.map(s => s.cut_off_hour));
+      maxCutOff = Math.max(...relevantSlots.map(s => s.cut_off_hour));
     }
 
     // หากเวลาปัจจุบัน เลยเวลาตัดรอบสุดท้ายของวันไปแล้ว ให้บังคับเริ่มเลือกวันพรุ่งนี้แทน
     if (hour >= maxCutOff) {
       minDateObj.setDate(minDateObj.getDate() + 1);
     }
-    
+
     const offset = minDateObj.getTimezoneOffset();
     const localDate = new Date(minDateObj.getTime() - (offset * 60 * 1000));
     const calculatedMinDate = localDate.toISOString().split('T')[0];
-    
+
     setMinDateStr(calculatedMinDate);
 
     // หากมีการเลือกวันที่ไว้แล้ว แต่วันที่เลือกน้อยกว่าที่ควรจะเป็น ให้รีเซ็ตค่า
@@ -142,7 +142,7 @@ export default function CheckoutPage() {
         setDeliverySlot('');
       }
     }
-    
+
     // รีเซ็ตหากเปลี่ยนวิธีรับของแล้วรอบที่เลือกไว้ไม่รองรับ
     const slotObj = slots.find(s => s.id === deliverySlot);
     if (slotObj && slotObj.slot_type && slotObj.slot_type !== 'both' && slotObj.slot_type !== deliveryMethod) {
@@ -305,8 +305,8 @@ export default function CheckoutPage() {
         .single();
 
       if (deliveryDate === todayStr && slotData && currentHour >= slotData.cut_off_hour) {
-        alert(deliveryMethod === 'delivery' 
-          ? 'ขออภัย รอบจัดส่งนี้ปิดรับออเดอร์สำหรับวันนี้แล้ว กรุณาเลือกรอบอื่นหรือเปลี่ยนวันจัดส่ง' 
+        alert(deliveryMethod === 'delivery'
+          ? 'ขออภัย รอบจัดส่งนี้ปิดรับออเดอร์สำหรับวันนี้แล้ว กรุณาเลือกรอบอื่นหรือเปลี่ยนวันจัดส่ง'
           : 'ขออภัย ช่วงเวลานี้ปิดรับออเดอร์แล้ว กรุณาเลือกเวลาอื่นหรือเปลี่ยนวันเข้ารับสินค้า');
         setIsSubmitting(false);
         return;
@@ -323,13 +323,13 @@ export default function CheckoutPage() {
           delivery_date: deliveryDate,
           delivery_slot: deliverySlot,
           delivery_method: deliveryMethod, // เก็บรูปแบบการรับของ
-          customer_info: { 
+          customer_info: {
             name: formData.name,
             phone: formData.phone,
             address: deliveryMethod === 'delivery' ? formData.address : null,
-            delivery_fee: deliveryMethod === 'delivery' ? deliveryFee : 0, 
+            delivery_fee: deliveryMethod === 'delivery' ? deliveryFee : 0,
             distance_km: deliveryMethod === 'delivery' ? distanceKm : null
-          }, 
+          },
           status: 'pending',
         })
         .select('id')
@@ -355,17 +355,17 @@ export default function CheckoutPage() {
           name: formData.name,
           phone: formData.phone,
         };
-        
+
         if (deliveryMethod === 'delivery') {
           userUpdate.lat = location.lat.toString();
           userUpdate.lng = location.lng.toString();
         }
-        
+
         await supabase
           .from('users')
           .update(userUpdate)
           .eq('id', user.id);
-        
+
         if (deliveryMethod === 'delivery') {
           localStorage.setItem('last_saved_address', formData.address);
         }
@@ -375,8 +375,8 @@ export default function CheckoutPage() {
       if (deliveryMethod === 'pickup' && deliveryDate === todayStr) {
         try {
           const slotName = slots.find(s => s.id === deliverySlot)?.name || 'ไม่ระบุเวลา';
-          const message = `\n🔔 มีลูกค้านัดรับที่ร้านวันนี้!\nออเดอร์: #${orderData.id.slice(0, 8).toUpperCase()}\nลูกค้า: ${formData.name}\nโทร: ${formData.phone}\nเวลานัดรับ: ${slotName}\nยอดสุทธิ: ฿${(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}`;
-          
+          const message = `\n🔔 มีลูกค้านัดรับที่ร้านวันนี้!\nออเดอร์: #${orderData.id.slice(0, 8).toUpperCase()}\nลูกค้า: ${formData.name}\nโทร: ${formData.phone}\nเวลานัดรับ: ${slotName}\nยอดสุทธิ: ฿${getTotalPrice().toLocaleString()}`;
+
           await fetch('/api/notify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -406,7 +406,7 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 md:px-8">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* ฝั่งซ้าย: ฟอร์มที่อยู่ และ แผนที่ปักหมุด */}
         <div className="lg:col-span-2 space-y-6">
 
@@ -414,12 +414,12 @@ export default function CheckoutPage() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">รูปแบบการรับสินค้า</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
+
               <label className="relative cursor-pointer group">
-                <input 
-                  type="radio" 
-                  name="deliveryMethod" 
-                  value="delivery" 
+                <input
+                  type="radio"
+                  name="deliveryMethod"
+                  value="delivery"
                   className="peer sr-only"
                   checked={deliveryMethod === 'delivery'}
                   onChange={() => setDeliveryMethod('delivery')}
@@ -436,10 +436,10 @@ export default function CheckoutPage() {
               </label>
 
               <label className="relative cursor-pointer group">
-                <input 
-                  type="radio" 
-                  name="deliveryMethod" 
-                  value="pickup" 
+                <input
+                  type="radio"
+                  name="deliveryMethod"
+                  value="pickup"
                   className="peer sr-only"
                   checked={deliveryMethod === 'pickup'}
                   onChange={() => setDeliveryMethod('pickup')}
@@ -460,7 +460,7 @@ export default function CheckoutPage() {
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-6">ข้อมูลผู้ติดต่อ</h2>
-            
+
             <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -487,15 +487,15 @@ export default function CheckoutPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'วันที่จัดส่ง' : 'วันที่เข้ารับสินค้า'}</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   required
                   title="เลือกวันที่"
                   placeholder="วว/ดด/ปปปป"
                   min={minDateStr}
-                  value={deliveryDate} 
-                  onChange={(e) => setDeliveryDate(e.target.value)} 
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                 />
               </div>
               <div>
@@ -508,18 +508,18 @@ export default function CheckoutPage() {
                       const isDisabled = deliveryDate === todayStr && currentHour >= slot.cut_off_hour;
                       return (
                         <label key={slot.id} className={`flex-1 min-w-[120px] flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === slot.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
-                          <input type="radio" name="slot" value={slot.id} className="sr-only" 
-                                disabled={isDisabled}
-                                checked={deliverySlot === slot.id} 
-                                onChange={() => setDeliverySlot(slot.id)} />
-                          <span className="text-sm font-medium text-center">{slot.name}<br/><span className="text-xs font-normal opacity-80">({slot.time_range})</span></span>
+                          <input type="radio" name="slot" value={slot.id} className="sr-only"
+                            disabled={isDisabled}
+                            checked={deliverySlot === slot.id}
+                            onChange={() => setDeliverySlot(slot.id)} />
+                          <span className="text-sm font-medium text-center">{slot.name}<br /><span className="text-xs font-normal opacity-80">({slot.time_range})</span></span>
                         </label>
                       )
                     })}
                   </div>
                 )}
                 {deliveryDate === todayStr && slots.filter(s => !s.slot_type || s.slot_type === 'both' || s.slot_type === deliveryMethod).some(s => currentHour >= s.cut_off_hour) && (
-                  <p className="text-xs text-orange-600 mt-3 font-medium flex items-start gap-1"><AlertCircle className="w-4 h-4 shrink-0"/> {deliveryMethod === 'delivery' ? 'บางรอบจัดส่งถูกปิดใช้งานสำหรับวันนี้ เนื่องจากเลยเวลาตัดรอบแล้ว' : 'บางช่วงเวลาไม่สามารถเข้ารับสินค้าได้ เนื่องจากเลยเวลาเตรียมสินค้าแล้ว'}</p>
+                  <p className="text-xs text-orange-600 mt-3 font-medium flex items-start gap-1"><AlertCircle className="w-4 h-4 shrink-0" /> {deliveryMethod === 'delivery' ? 'บางรอบจัดส่งถูกปิดใช้งานสำหรับวันนี้ เนื่องจากเลยเวลาตัดรอบแล้ว' : 'บางช่วงเวลาไม่สามารถเข้ารับสินค้าได้ เนื่องจากเลยเวลาเตรียมสินค้าแล้ว'}</p>
                 )}
               </div>
             </div>
@@ -535,9 +535,9 @@ export default function CheckoutPage() {
                     <p className="text-blue-600 font-medium animate-pulse">📍 กำลังค้นหาตำแหน่งปัจจุบันของคุณ...</p>
                   </div>
                 ) : (
-                  <CheckoutMap 
-                    initialPosition={[location.lat, location.lng]} 
-                    onLocationChange={(lat, lng) => setLocation({ lat, lng })} 
+                  <CheckoutMap
+                    initialPosition={[location.lat, location.lng]}
+                    onLocationChange={(lat, lng) => setLocation({ lat, lng })}
                   />
                 )}
               </div>
@@ -576,7 +576,7 @@ export default function CheckoutPage() {
                   {branchData?.address || 'ไม่พบที่อยู่สาขา'}
                 </p>
               </div>
-              
+
               <div className="mt-4 flex items-start gap-2 text-emerald-700 text-sm bg-emerald-100/50 p-3 rounded-lg">
                 <Info className="w-5 h-5 shrink-0" />
                 <p><strong>ข้อควรทราบ:</strong> กรุณามารับสินค้าภายในวันและเวลาที่เลือกรอบไว้ และแสดงหน้าประวัติคำสั่งซื้อให้พนักงานที่เคาน์เตอร์</p>
@@ -589,7 +589,7 @@ export default function CheckoutPage() {
         <div className="lg:col-span-1">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 sticky top-6">
             <h2 className="text-xl font-bold text-slate-800 mb-6">สรุปคำสั่งซื้อ</h2>
-            
+
             <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
               {items.map((item) => (
                 <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
@@ -627,12 +627,12 @@ export default function CheckoutPage() {
                 <span>฿{getTotalPrice().toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-              <span>ค่าจัดส่ง {deliveryMethod === 'delivery' ? `(ระยะทาง ${distanceKm !== null ? distanceKm.toFixed(1) : 0} กม.)` : ''}</span>
-              <span>{deliveryMethod === 'pickup' ? 'ไม่มีค่าจัดส่ง' : isCalculatingFee ? 'กำลังคำนวณ...' : `฿${deliveryFee.toLocaleString()}`}</span>
+                <span>ค่าจัดส่ง {deliveryMethod === 'delivery' ? `(ระยะทาง ${distanceKm !== null ? distanceKm.toFixed(1) : 0} กม.)` : ''}</span>
+                <span>{deliveryMethod === 'pickup' ? 'ไม่มีค่าจัดส่ง' : isCalculatingFee ? 'กำลังคำนวณ...' : `฿${deliveryFee.toLocaleString()}`}</span>
               </div>
               <div className="flex justify-between text-xl font-bold text-blue-600 pt-2 border-t border-gray-200">
                 <span>ยอดรวมทั้งสิ้น</span>
-              <span>฿{(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</span>
+                <span>฿{(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</span>
               </div>
             </div>
 
@@ -649,10 +649,9 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 form="checkout-form"
-              disabled={isSubmitting || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee)}
-              className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${
-                (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
-                }`}
+                disabled={isSubmitting || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee)}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${(deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
+                  }`}
               >
                 {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}
               </button>

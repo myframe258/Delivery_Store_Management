@@ -12,6 +12,8 @@ interface InventoryItem {
   image_url: string | null;
   stock_count: number;
   status: number;
+  products?: { is_track_stock: boolean }; // รองรับข้อมูลที่ Join มา
+  is_track_stock?: boolean; // รองรับข้อมูลแบน
 }
 
 interface InventoryClientProps {
@@ -159,9 +161,11 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
                   <h3 className="font-semibold text-slate-800 text-sm line-clamp-1 mb-1">{item.name}</h3>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-bold text-blue-600">฿{item.price.toLocaleString()}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOutOfStock ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                      {isOutOfStock ? 'สินค้าหมด' : `คงเหลือ: ${item.stock_count}`}
-                    </span>
+                    {(item.is_track_stock !== false && item.products?.is_track_stock !== false) && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOutOfStock ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        {isOutOfStock ? 'สินค้าหมด' : `คงเหลือ: ${item.stock_count}`}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -176,9 +180,11 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
                   </div>
                   <span className="text-xs font-medium text-gray-500">{isActive ? 'เปิดขาย' : 'ปิดการขาย'}</span>
                 </label>
-                <button onClick={() => { setEditingProduct(item); setEditStockValue(item.stock_count); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition">
-                  <Edit2 className="w-4 h-4" /> แก้ไขสต็อก
-                </button>
+                {(item.is_track_stock !== false && item.products?.is_track_stock !== false) && (
+                  <button onClick={() => { setEditingProduct(item); setEditStockValue(item.stock_count); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition">
+                    <Edit2 className="w-4 h-4" /> แก้ไขสต็อก
+                  </button>
+                )}
               </div>
             </div>
           );

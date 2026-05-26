@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { FolderTree, Plus, Edit2, Trash2, X } from 'lucide-react';
 
@@ -8,6 +8,8 @@ type Category = {
   id: string;
   name: string;
   created_at: string;
+  parent_id?: string | null;
+  sort_order: number;
 };
 
 export default function SuperAdminCategoriesPage() {
@@ -27,6 +29,8 @@ export default function SuperAdminCategoriesPage() {
   // Form State
   const [formData, setFormData] = useState({
     name: '',
+    parent_id: '' as string | null,
+    sort_order: 1,
   });
 
   useEffect(() => {
@@ -40,7 +44,8 @@ export default function SuperAdminCategoriesPage() {
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
       setCategories(data || []);
@@ -57,10 +62,12 @@ export default function SuperAdminCategoriesPage() {
       setEditingId(category.id);
       setFormData({
         name: category.name || '',
+        parent_id: category.parent_id || '',
+        sort_order: category.sort_order || 1,
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '' });
+      setFormData({ name: '', parent_id: '', sort_order: categories.length > 0 ? Math.max(...categories.map(c => c.sort_order || 0)) + 1 : 1 });
     }
     setIsModalOpen(true);
   };
@@ -77,6 +84,8 @@ export default function SuperAdminCategoriesPage() {
     try {
       const payload = {
         name: formData.name.trim(),
+        parent_id: formData.parent_id || null,
+        sort_order: formData.sort_order,
       };
 
       if (!payload.name) {
@@ -138,6 +147,10 @@ export default function SuperAdminCategoriesPage() {
     }
   };
 
+  // ฟังก์ชันแยกหมวดหมู่หลักและหมวดหมู่ย่อย
+  const rootCategories = categories.filter(c => !c.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const getChildren = (parentId: string) => categories.filter(c => c.parent_id === parentId).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8">
       {/* Header */}
@@ -164,6 +177,7 @@ export default function SuperAdminCategoriesPage() {
           <table className="w-full text-sm text-left text-gray-600">
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-100">
               <tr>
+                <th className="px-6 py-4 w-20 text-center">ลำดับ</th>
                 <th className="px-6 py-4">ชื่อหมวดหมู่</th>
                 <th className="px-6 py-4 w-40 text-center">จัดการ</th>
               </tr>
@@ -171,11 +185,11 @@ export default function SuperAdminCategoriesPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={2} className="text-center py-12 text-gray-500 animate-pulse">กำลังโหลดข้อมูล...</td>
+                  <td colSpan={3} className="text-center py-12 text-gray-500 animate-pulse">กำลังโหลดข้อมูล...</td>
                 </tr>
               ) : categories.length === 0 ? (
                 <tr>
-                  <td colSpan={2} className="text-center py-12 text-gray-500">
+                  <td colSpan={3} className="text-center py-12 text-gray-500">
                     <div className="flex flex-col items-center justify-center">
                       <FolderTree className="w-12 h-12 text-gray-300 mb-2" />
                       <p>ยังไม่มีข้อมูลหมวดหมู่ในระบบ</p>
@@ -183,22 +197,49 @@ export default function SuperAdminCategoriesPage() {
                   </td>
                 </tr>
               ) : (
-                categories.map((category) => (
-                  <tr key={category.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-gray-900 text-base">{category.name}</p>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex justify-center gap-2">
-                        <button onClick={() => openModal(category)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไข">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(category.id, category.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบ">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                rootCategories.map((category) => (
+                  <React.Fragment key={category.id}>
+                    <tr className="border-b border-gray-200 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 text-center font-medium text-gray-500">
+                        {category.sort_order}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-gray-900 text-base">{category.name}</p>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button onClick={() => openModal(category)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไข">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDelete(category.id, category.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบ">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {getChildren(category.id).map(child => (
+                      <tr key={child.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors bg-gray-50/30">
+                        <td className="px-6 py-4 text-center font-medium text-gray-400">
+                          {child.sort_order}
+                        </td>
+                        <td className="px-6 py-4 pl-12">
+                          <p className="font-medium text-gray-700 flex items-center gap-2">
+                            <span className="text-gray-400">↳</span> {child.name}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="flex justify-center gap-2">
+                            <button onClick={() => openModal(child)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไข">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDelete(child.id, child.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบ">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
@@ -226,6 +267,35 @@ export default function SuperAdminCategoriesPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
                   placeholder="เช่น เครื่องดื่ม, ของแห้ง" 
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ลำดับการแสดงผล <span className="text-red-500">*</span></label>
+                <input 
+                  required 
+                  type="number" 
+                  min="1"
+                  value={formData.sort_order} 
+                  onChange={(e) => setFormData({...formData, sort_order: parseInt(e.target.value) || 1})} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                  placeholder="1, 2, 3..." 
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">อยู่ภายใต้หมวดหมู่หลัก (ไม่บังคับ)</label>
+                <select 
+                  title="เลือกหมวดหมู่หลัก"
+                  value={formData.parent_id || ''} 
+                  onChange={(e) => setFormData({...formData, parent_id: e.target.value})} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                >
+                  <option value="">-- เป็นหมวดหมู่หลัก --</option>
+                  {rootCategories
+                    .filter(c => c.id !== editingId) // ไม่ให้เลือกตัวเองเป็นแม่
+                    .map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)
+                  }
+                </select>
               </div>
               
               <div className="mt-4 flex justify-end gap-3 border-t border-gray-100 pt-4">

@@ -34,7 +34,7 @@ export default async function BranchInventoryPage() {
   // 4. ดึงสินค้าทั้งหมดจากส่วนกลาง (Master)
   const { data: productsData } = await supabase
     .from('products')
-    .select('id, name, price, image_url')
+    .select('id, name, price, image_url, is_track_stock')
     .order('name');
 
   // 5. ดึงสต็อกสินค้าเฉพาะของสาขานี้

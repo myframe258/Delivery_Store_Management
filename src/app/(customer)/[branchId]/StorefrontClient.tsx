@@ -15,6 +15,7 @@ interface Product {
   image_url: string | null;
   category_id: string | null;
   stock_count: number;
+  is_track_stock?: boolean;
 }
 
 interface Category {
@@ -248,9 +249,11 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                   
                   <div className="mt-3 sm:mt-4 flex items-end justify-between mb-3 sm:mb-4">
                     <span className="font-bold text-base sm:text-xl text-blue-600">฿{product.price.toLocaleString()}</span>
-                    <span className="text-[10px] sm:text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md">
-                      คงเหลือ {product.stock_count}
-                    </span>
+                    {product.is_track_stock !== false && (
+                      <span className="text-[10px] sm:text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-md">
+                        คงเหลือ {product.stock_count}
+                      </span>
+                    )}
                   </div>
                   
                   <div className="w-full mt-auto">

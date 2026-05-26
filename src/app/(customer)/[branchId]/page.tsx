@@ -14,6 +14,7 @@ type ProductRecord = {
   price: number;
   image_url: string | null;
   category_id: string | null;
+  is_track_stock?: boolean;
 };
 
 type InventoryRecord = {
@@ -48,30 +49,35 @@ export default async function BranchStorefrontPage({
     .select(`
       stock_count,
       status,
-      products (
+      products!inner (
         id,
         name,
         description,
         price,
         image_url,
-        category_id
+        category_id,
+        is_track_stock
       )
     `)
     .eq('branch_id', branchId)
-    .gt('stock_count', 0) // ดึงเฉพาะสินค้าที่มีสต็อกมากกว่า 0
     .neq('status', 0); // ดึงเฉพาะสินค้าที่สถานะไม่ใช่ out_of_stock
 
   // 3. ดึงข้อมูลประเภทสินค้า (Categories) เพื่อสร้าง Tabs เมนู
   const { data: categories } = await supabase
     .from('categories')
     .select('id, name')
-    .order('created_at');
+    .order('sort_order', { ascending: true });
 
   // แปลงข้อมูลให้อ่านง่ายขึ้น
   const products = (inventory as InventoryRecord[] | null)?.map((item) => {
     const prod = Array.isArray(item.products) ? item.products[0] : item.products;
     if (!prod) return null;
     
+    // กรองสินค้าที่ต้องนับสต็อกแต่สต็อกหมดทิ้งไป (ถ้าไม่ต้องนับสต็อก แม้สต็อกเป็น 0 ก็ให้ผ่านได้)
+    if (prod.is_track_stock !== false && item.stock_count <= 0) {
+      return null;
+    }
+
     return {
       id: prod.id,
       name: prod.name || '',
@@ -80,6 +86,7 @@ export default async function BranchStorefrontPage({
       image_url: prod.image_url,
       category_id: prod.category_id || null,
       stock_count: item.stock_count,
+      is_track_stock: prod.is_track_stock !== false,
     };
   }).filter((p): p is NonNullable<typeof p> => p !== null) || [];
 

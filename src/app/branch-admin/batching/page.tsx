@@ -84,7 +84,7 @@ export default function BatchingPage() {
         if (res.ok) {
           const data = await res.json();
           const allOrders = Object.values(data.slots).flatMap((slot: any) => slot.orders);
-          ordersData = allOrders.filter((o: any) => o.status === 'pending');
+          ordersData = allOrders.filter((o: any) => o.status === 'pending' && o.lat !== null && o.lng !== null);
           setGroupedSlots(data.slots || {});
         }
       } catch (err) {
@@ -131,7 +131,7 @@ export default function BatchingPage() {
         if (res.ok) {
           const data = await res.json();
           const allOrders = Object.values(data.slots).flatMap((slot: any) => slot.orders);
-          setOrders(allOrders.filter((o: any) => o.status === 'pending'));
+          setOrders(allOrders.filter((o: any) => o.status === 'pending' && o.lat !== null && o.lng !== null));
           setGroupedSlots(data.slots || {});
         }
       } catch (err) {
@@ -338,7 +338,7 @@ export default function BatchingPage() {
               ) : (
                 <div className="space-y-6">
                   {Object.entries(groupedSlots).map(([slotId, slotInfo]: [string, any]) => {
-                    const slotOrders = slotInfo.orders.filter((o: any) => o.status === 'pending');
+                    const slotOrders = slotInfo.orders.filter((o: any) => o.status === 'pending' && o.lat !== null && o.lng !== null);
                     if (slotOrders.length === 0) return null;
                     
                     return (
@@ -401,6 +401,7 @@ export default function BatchingPage() {
               </Marker>
 
               {orders.map((order) => {
+                if (!order.lat || !order.lng) return null; // ป้องกัน Map Crash จากออเดอร์ที่ไม่มีพิกัด
                 const isSelected = selectedOrderIds.includes(order.id);
                 return (
                   <Marker

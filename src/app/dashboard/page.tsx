@@ -19,7 +19,7 @@ export default async function DashboardPage() {
     case 'super_admin':
       return redirect('/super-admin/branches');
     case 'branch_admin':
-      return redirect('/branch-admin/inventory');
+      return redirect('/branch-admin/batching');
     case 'rider':
       return redirect('/rider/batches');
     case 'picker':

@@ -38,9 +38,9 @@ export async function proxy(request: NextRequest) {
 
   // 2. Guard สำหรับ Role อื่นๆ
   if (path.startsWith('/branch-admin') && role !== 'branch_admin') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
-  if (path.startsWith('/rider') && role !== 'rider') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
+  if (path.startsWith('/rider') && role !== 'rider' && role !== 'branch_admin') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
   if (path.startsWith('/super-admin') && role !== 'super_admin') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
-  if (path.startsWith('/picker') && role !== 'picker') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
+  if (path.startsWith('/picker') && role !== 'picker' && role !== 'branch_admin') { return NextResponse.redirect(new URL(role ? '/dashboard' : '/login', request.url)); }
 
 
   return supabaseResponse;

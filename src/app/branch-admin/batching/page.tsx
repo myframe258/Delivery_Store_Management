@@ -98,7 +98,7 @@ export default function BatchingPage() {
         .from('users')
         .select('*')
         .eq('branch_id', branchId)
-        .eq('role', 'rider');
+        .in('role', ['rider', 'branch_admin']);
       setRiders(ridersData || []);
 
       // 5. ดึงรอบจัดส่งปัจจุบันที่ยังไม่เสร็จ (Manage Batches)
@@ -326,6 +326,8 @@ export default function BatchingPage() {
                 <input 
                   type="date" 
                   value={selectedDate}
+                  title="เลือกวันที่ต้องการจัดรอบส่ง"
+                  placeholder="วว/ดด/ปปปป"
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 />

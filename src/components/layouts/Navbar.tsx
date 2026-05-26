@@ -55,6 +55,7 @@ export default function Navbar() {
     if (r === 'super_admin') return 'ผู้ดูแลระบบสูงสุด';
     if (r === 'branch_admin') return 'ผู้จัดการสาขา';
     if (r === 'rider') return 'พนักงานขับรถ';
+    if (r === 'picker') return 'พนักงานจัดของ';
     if (r === 'customer') return 'ลูกค้า';
     return 'ลูกค้าทั่วไป';
   };
@@ -104,7 +105,13 @@ export default function Navbar() {
             </>
           )}
 
-          {role === 'rider' && (
+          {(role === 'branch_admin' || role === 'picker') && (
+            <Link href="/picker/dashboard" className="flex items-center gap-1 hover:text-blue-600 transition">
+              <Package className="w-4 h-4" /> งานจัดของ
+            </Link>
+          )}
+
+          {(role === 'branch_admin' || role === 'rider') && (
             <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
               <Truck className="w-4 h-4" /> งานส่งของ
             </Link>

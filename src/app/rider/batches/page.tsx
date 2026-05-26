@@ -21,8 +21,8 @@ export default async function RiderBatchesPage() {
     .eq('id', user.id)
     .single();
 
-  if (userData?.role !== 'rider') {
-    return <div className="p-8 text-center text-red-500 font-medium">คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะคนขับเท่านั้น)</div>;
+  if (userData?.role !== 'rider' && userData?.role !== 'branch_admin') {
+    return <div className="p-8 text-center text-red-500 font-medium">คุณไม่มีสิทธิ์เข้าถึงหน้านี้ (เฉพาะคนขับหรือผู้จัดการสาขาเท่านั้น)</div>;
   }
 
   // 3. ดึง Delivery Batches เฉพาะงานที่ Assign ให้คนขับคนนี้ และยังวิ่งไม่เสร็จ

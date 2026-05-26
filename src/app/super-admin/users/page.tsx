@@ -236,13 +236,24 @@ export default function SuperAdminUsersPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Shield className="w-5 h-5 text-blue-600" /> แก้ไขสิทธิ์ผู้ใช้งาน</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200"><X className="w-6 h-6" /></button>
+              <button
+                onClick={closeModal} 
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
             
             <form onSubmit={handleSave} className="p-6 flex-grow flex flex-col gap-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ระดับสิทธิ์ (Role)</label>
-                <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                <select 
+                  title="เลือกระดับสิทธิ์"
+                  value={formData.role} 
+                  onChange={(e) => setFormData({...formData, role: e.target.value})} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
                   <option value="customer">Customer (ลูกค้า)</option>
                   <option value="rider">Rider (พนักงานขับรถ)</option>
                   <option value="branch_admin">Branch Admin (ผู้จัดการสาขา)</option>
@@ -253,7 +264,13 @@ export default function SuperAdminUsersPage() {
               {(formData.role === 'branch_admin' || formData.role === 'rider') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">สาขาต้นสังกัด <span className="text-red-500">*</span></label>
-                  <select required value={formData.branch_id} onChange={(e) => setFormData({...formData, branch_id: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                  <select 
+                    title="เลือกสาขาต้นสังกัด"
+                    required 
+                    value={formData.branch_id} 
+                    onChange={(e) => setFormData({...formData, branch_id: e.target.value})} 
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
                     <option value="">-- กรุณาเลือกสาขา --</option>
                     {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>

@@ -226,7 +226,13 @@ export default function DeliverySlotsPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h2 className="text-xl font-bold text-gray-800">{editingId ? 'แก้ไขรอบจัดส่ง' : 'เพิ่มรอบจัดส่งใหม่'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition"><X className="w-6 h-6" /></button>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="text-gray-400 hover:text-gray-600 transition"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
             
             <form onSubmit={handleSave} className="p-6 space-y-5">
@@ -246,7 +252,7 @@ export default function DeliverySlotsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ลำดับการแสดงผล</label>
-                  <input required type="number" min="1" value={formData.sort_order} onChange={(e) => setFormData({...formData, sort_order: parseInt(e.target.value)})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <input required type="number" min="1" value={formData.sort_order} onChange={(e) => setFormData({...formData, sort_order: parseInt(e.target.value)})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="1" title="ลำดับการแสดงผล" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">สถานะ</label>

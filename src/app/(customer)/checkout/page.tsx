@@ -8,7 +8,6 @@ import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
 import { Plus, Minus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
-import { validateDeliverySlot } from '@/app/actions/checkoutAction';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
 const CheckoutMap = dynamic(() => import('@/components/maps/CheckoutMap'), {
@@ -262,14 +261,22 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      // ตรวจสอบกฎ Cut-off ฝั่งเซิร์ฟเวอร์ก่อนบันทึก
-      const validation = await validateDeliverySlot(deliveryDate, deliverySlot);
-      if (!validation.success) {
-        alert(validation.error);
+      // ตรวจสอบกฎ Cut-off เบื้องต้น
+      const now = new Date();
+      const currentHour = now.getHours();
+      const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60 * 1000)).toISOString().split('T')[0];
+
+      const { data: slotData } = await supabase
+        .from('delivery_slots')
+        .select('cut_off_hour')
+        .eq('id', deliverySlot)
+        .single();
+
+      if (deliveryDate === todayStr && slotData && currentHour >= slotData.cut_off_hour) {
+        alert('ขออภัย รอบจัดส่งนี้ปิดรับออเดอร์สำหรับวันนี้แล้ว กรุณาเลือกรอบอื่นหรือเปลี่ยนวันจัดส่ง');
         setIsSubmitting(false);
         return;
       }
-
       // 1. บันทึกข้อมูลลงตาราง orders
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
@@ -368,6 +375,8 @@ export default function CheckoutPage() {
                 <input 
                   type="date" 
                   required
+                  title="เลือกวันที่ต้องการจัดส่ง"
+                  placeholder="วว/ดด/ปปปป"
                   min={minDateStr}
                   value={deliveryDate} 
                   onChange={(e) => setDeliveryDate(e.target.value)} 

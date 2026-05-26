@@ -98,7 +98,7 @@ export default function SuperAdminProductsPage() {
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '', is_track_stock: true });
+      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '', is_track_stock: false });
     }
     setIsModalOpen(true);
   };

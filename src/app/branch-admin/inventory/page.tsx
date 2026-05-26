@@ -34,7 +34,7 @@ export default async function BranchInventoryPage() {
   // 4. ดึงสินค้าทั้งหมดจากส่วนกลาง (Master)
   const { data: productsData } = await supabase
     .from('products')
-    .select('id, name, price, image_url, is_track_stock')
+    .select('id, name, price, image_url, is_track_stock, category_id, categories(name)')
     .order('name');
 
   // 5. ดึงสต็อกสินค้าเฉพาะของสาขานี้
@@ -46,13 +46,17 @@ export default async function BranchInventoryPage() {
   // 6. แปลงและรวมข้อมูลให้ฝั่ง Client ใช้งานได้สะดวก
   const mergedInventory = productsData?.map(product => {
     const inv = inventoryData?.find(i => i.product_id === product.id);
+    const category = Array.isArray(product.categories) ? product.categories[0] : product.categories;
     return {
       product_id: product.id,
       name: product.name,
       price: product.price,
       image_url: product.image_url,
       stock_count: inv?.stock_count || 0,
-      status: inv?.status || 0 // 1 = เปิดขาย, 0 = ปิดขาย
+      status: inv?.status || 0, // 1 = เปิดขาย, 0 = ปิดขาย
+      is_track_stock: product.is_track_stock !== false,
+      category_id: product.category_id,
+      category_name: category?.name || 'ไม่มีหมวดหมู่'
     };
   }) || [];
 

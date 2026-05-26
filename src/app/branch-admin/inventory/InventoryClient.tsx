@@ -12,8 +12,9 @@ interface InventoryItem {
   image_url: string | null;
   stock_count: number;
   status: number;
-  products?: { is_track_stock: boolean }; // รองรับข้อมูลที่ Join มา
-  is_track_stock?: boolean; // รองรับข้อมูลแบน
+  is_track_stock?: boolean;
+  category_id?: string | null;
+  category_name?: string;
 }
 
 interface InventoryClientProps {
@@ -24,6 +25,7 @@ interface InventoryClientProps {
 export default function InventoryClient({ initialInventory, branch }: InventoryClientProps) {
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
   // Modal States
   const [editingProduct, setEditingProduct] = useState<InventoryItem | null>(null);
@@ -116,10 +118,15 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
     }
   };
 
+  // ดึงรายการหมวดหมู่ทั้งหมดจากสินค้าที่มี (ไม่ซ้ำกัน)
+  const categories = Array.from(new Set(inventory.map(item => item.category_name))).filter(Boolean) as string[];
+
   // กรองรายการสินค้าตามคำค้นหา
-  const filteredInventory = inventory.filter((item) => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredInventory = inventory.filter((item) => {
+    const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchCategory = selectedCategory ? item.category_name === selectedCategory : true;
+    return matchSearch && matchCategory;
+  });
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -141,6 +148,31 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
         </div>
       </div>
 
+      {/* Category Tabs */}
+      {categories.length > 0 && (
+        <div className="flex overflow-x-auto gap-2 px-5 pt-3 pb-3 bg-slate-50 border-b border-gray-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+              selectedCategory === null ? 'bg-slate-800 text-white border-slate-800 shadow-sm' : 'bg-white text-slate-600 border-gray-200 hover:bg-gray-100'
+            }`}
+          >
+            ทั้งหมด
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+                selectedCategory === cat ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-600 border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Inventory List (Responsive Grid) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
         {filteredInventory.map((item) => {
@@ -161,9 +193,13 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
                   <h3 className="font-semibold text-slate-800 text-sm line-clamp-1 mb-1">{item.name}</h3>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-bold text-blue-600">฿{item.price.toLocaleString()}</span>
-                    {(item.is_track_stock !== false && item.products?.is_track_stock !== false) && (
+                    {item.is_track_stock ? (
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOutOfStock ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                         {isOutOfStock ? 'สินค้าหมด' : `คงเหลือ: ${item.stock_count}`}
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">
+                        ไม่ต้องนับสต็อก
                       </span>
                     )}
                   </div>
@@ -180,7 +216,7 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
                   </div>
                   <span className="text-xs font-medium text-gray-500">{isActive ? 'เปิดขาย' : 'ปิดการขาย'}</span>
                 </label>
-                {(item.is_track_stock !== false && item.products?.is_track_stock !== false) && (
+                {item.is_track_stock && (
                   <button onClick={() => { setEditingProduct(item); setEditStockValue(item.stock_count); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition">
                     <Edit2 className="w-4 h-4" /> แก้ไขสต็อก
                   </button>

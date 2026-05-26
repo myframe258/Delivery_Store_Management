@@ -76,7 +76,7 @@ export default async function BranchStorefrontPage({
   // 3. ดึงข้อมูลประเภทสินค้า (Categories) เพื่อสร้าง Tabs เมนู
   const { data: categories } = await supabase
     .from('categories')
-    .select('id, name')
+    .select('id, name, parent_id')
     .order('sort_order', { ascending: true });
 
   // แปลงข้อมูลให้อ่านง่ายขึ้น

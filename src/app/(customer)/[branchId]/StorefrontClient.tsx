@@ -23,6 +23,7 @@ interface Product {
 interface Category {
   id: string;
   name: string;
+  parent_id?: string | null;
 }
 
 interface StorefrontClientProps {
@@ -50,6 +51,14 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   const totalItems = Number(branchCartItems.reduce((sum, item) => sum + item.quantity, 0).toFixed(2));
   const totalPrice = Number(branchCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2));
   const formatNumber = (num: number) => Number.isInteger(num) ? num.toString() : num.toFixed(2).replace(/\.?0+$/, '');
+
+  // จัดกลุ่มหมวดหมู่หลักและหมวดหมู่ย่อยให้อยู่ติดกัน
+  const rootCategories = categories.filter(c => !c.parent_id);
+  const getChildren = (parentId: string) => categories.filter(c => c.parent_id === parentId);
+
+  // หา Root Category ID ปัจจุบัน (เพื่อให้รู้ว่าควรเปิด Subcategories ของหมวดหมู่ไหน)
+  const activeCatObj = categories.find(c => c.id === selectedCategory);
+  const activeRootCategoryId = activeCatObj?.parent_id ? activeCatObj.parent_id : activeCatObj?.id || null;
 
   // รีเซ็ตจำนวนที่แสดงผลเมื่อเปลี่ยนหมวดหมู่หรือค้นหา
   useEffect(() => {
@@ -83,7 +92,13 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   // กรองสินค้าแบบเรียลไทม์
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      const matchCategory = selectedCategory ? p.category_id === selectedCategory : true;
+      let matchCategory = true;
+      if (selectedCategory) {
+        // หากเลือกหมวดหมู่หลัก ให้ดึงสินค้าของหมวดหมู่ย่อยใต้ตัวมันออกมาแสดงด้วย
+        const childIds = categories.filter(c => c.parent_id === selectedCategory).map(c => c.id);
+        matchCategory = p.category_id === selectedCategory || (p.category_id !== null && childIds.includes(p.category_id));
+      }
+      
       const matchSearch =
         p.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
         (p.description?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ?? false);
@@ -102,7 +117,7 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
     <div className="w-full flex flex-col lg:flex-row gap-8 items-start relative">
       
       {/* --- Mobile: Sticky Tab & Search --- */}
-      <div className="lg:hidden sticky top-14 md:top-16 z-30 bg-gray-50 pt-2 pb-4 -mx-6 px-6 w-[calc(100%+3rem)] space-y-3 shadow-sm border-b border-gray-200/60">
+      <div className="lg:hidden sticky top-14 md:top-16 z-30 bg-gray-50 pt-2 pb-3 -mx-6 px-6 w-[calc(100%+3rem)] space-y-3 shadow-sm border-b border-gray-200/60">
         {/* Mobile Search */}
         <div className="relative w-full">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -117,32 +132,64 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
         
         {/* Mobile Category */}
         {categories && categories.length > 0 && (
-          <div className="overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <div className="flex items-center gap-2 w-max pb-1">
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className={`flex-shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-sm font-medium transition-all ${
-                  selectedCategory === null
-                    ? 'bg-slate-800 text-white shadow-md border border-slate-800'
-                    : 'bg-white text-slate-600 border border-slate-200 active:scale-95'
-                }`}
-              >
-                หมวดหมู่ทั้งหมด
-              </button>
-              {categories.map((cat) => (
+          <div className="flex flex-col gap-2">
+            {/* แถวที่ 1: หมวดหมู่หลัก (Root Categories) */}
+            <div className="overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className="flex items-center gap-2 w-max pb-1">
                 <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
+                  onClick={() => setSelectedCategory(null)}
                   className={`flex-shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-sm font-medium transition-all ${
-                    selectedCategory === cat.id
-                      ? 'bg-blue-600 text-white shadow-md border border-blue-600'
-                      : 'bg-white text-slate-600 border border-slate-200 active:scale-95'
+                    selectedCategory === null ? 'bg-slate-800 text-white shadow-md border border-slate-800' : 'bg-white text-slate-600 border border-slate-200 active:scale-95'
                   }`}
                 >
-                  {cat.name}
+                  ทั้งหมด
                 </button>
-              ))}
+                {rootCategories.map((cat) => {
+                  const isRootActive = activeRootCategoryId === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`flex-shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-sm transition-all ${
+                        isRootActive ? 'bg-blue-600 text-white shadow-md border border-blue-600 font-bold' : 'bg-white text-slate-800 border border-slate-200 font-medium active:scale-95'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* แถวที่ 2: หมวดหมู่ย่อย (Sub Categories - แสดงเฉพาะเมื่อเลือกหมวดหมู่หลักที่มีลูก) */}
+            {activeRootCategoryId && getChildren(activeRootCategoryId).length > 0 && (
+              <div className="overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] animate-in slide-in-from-top-2 fade-in duration-200">
+                <div className="flex items-center gap-2 w-max pb-1">
+                  <button
+                    onClick={() => setSelectedCategory(activeRootCategoryId)}
+                    className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs transition-all ${
+                      selectedCategory === activeRootCategoryId ? 'bg-slate-700 text-white shadow-sm font-bold border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-200 active:scale-95'
+                    }`}
+                  >
+                    รวม {rootCategories.find(c => c.id === activeRootCategoryId)?.name}
+                  </button>
+                  {getChildren(activeRootCategoryId).map((subCat) => {
+                    const isSelected = selectedCategory === subCat.id;
+                    return (
+                      <button
+                        key={subCat.id}
+                        onClick={() => setSelectedCategory(subCat.id)}
+                        className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs transition-all ${
+                          isSelected ? 'bg-slate-700 text-white shadow-sm font-bold border border-slate-700' : 'bg-white text-slate-600 border border-slate-200 border-dashed active:scale-95'
+                        }`}
+                      >
+                        {subCat.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -181,19 +228,42 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
             >
               ทั้งหมด
             </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  selectedCategory === cat.id
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-600 hover:bg-slate-200/50'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
+            {rootCategories.map((rootCat) => {
+              const isRootActive = activeRootCategoryId === rootCat.id;
+              const isExactlySelected = selectedCategory === rootCat.id;
+              const children = getChildren(rootCat.id);
+              
+              return (
+                <div key={rootCat.id} className="flex flex-col space-y-1">
+                  <button
+                    onClick={() => setSelectedCategory(rootCat.id)}
+                    className={`w-full flex justify-between items-center px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      isExactlySelected ? 'bg-blue-600 text-white shadow-md' : isRootActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <span>{rootCat.name}</span>
+                    {children.length > 0 && <ChevronDown className={`w-4 h-4 transition-transform ${isRootActive ? 'rotate-180' : ''}`} />}
+                  </button>
+                  
+                  {/* แสดง Subcategories เมื่อ Root ถูกเลือกแบบ Accordion */}
+                  {isRootActive && children.length > 0 && (
+                    <div className="pl-4 pr-2 py-1 flex flex-col space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                      {children.map((subCat) => (
+                        <button
+                          key={subCat.id}
+                          onClick={() => setSelectedCategory(subCat.id)}
+                          className={`w-full text-left px-4 py-2 rounded-lg text-xs font-medium transition-colors relative before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1.5 before:h-1.5 before:rounded-full ${
+                            selectedCategory === subCat.id ? 'bg-slate-800 text-white shadow-sm before:bg-white' : 'text-slate-600 hover:bg-slate-100 before:bg-slate-300'
+                          }`}
+                        >
+                          {subCat.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </aside>

@@ -148,14 +148,14 @@ export default function Navbar() {
 
           {/* Login / Logout Section */}
           {user ? (
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-gray-100">
-                <User className="w-4 h-4 text-slate-500" />
-                <div className="flex flex-col items-start justify-center">
-                  <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate leading-none">{user.email?.split('@')[0]}</span>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Link href="/profile" className="flex items-center gap-2 bg-slate-50 hover:bg-blue-50 px-2 sm:px-3 py-1.5 rounded-full border border-gray-100 hover:border-blue-200 transition group" title="จัดการโปรไฟล์">
+                <User className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition" />
+                <div className="hidden sm:flex flex-col items-start justify-center">
+                  <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate leading-none group-hover:text-blue-700">{user.email?.split('@')[0]}</span>
                   <span className="text-[9px] font-bold text-blue-600 mt-1 leading-none">{getRoleDisplay(role)}</span>
                 </div>
-              </div>
+              </Link>
               <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-full transition" title="ออกจากระบบ">
                 <LogOut className="w-5 h-5" />
               </button>

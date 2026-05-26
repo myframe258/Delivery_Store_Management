@@ -6,7 +6,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
 import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
-import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info } from 'lucide-react';
+import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info, Home, Navigation } from 'lucide-react';
 import Link from 'next/link';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
@@ -32,6 +32,15 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
+interface Address {
+  id: string;
+  title: string;
+  address_text: string;
+  lat: number;
+  lng: number;
+  is_default: boolean;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const items = useCartStore((state) => state.items);
@@ -55,6 +64,11 @@ export default function CheckoutPage() {
     phone: '',
     address: '',
   });
+
+  // Address Book States
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [saveToAddressBook, setSaveToAddressBook] = useState(true);
 
   // State สำหรับวันและรอบจัดส่ง
   const [deliveryDate, setDeliveryDate] = useState<string>('');
@@ -179,22 +193,44 @@ export default function CheckoutPage() {
           .eq('id', currentUser.id)
           .single();
 
-        // 2. ดึงที่อยู่จัดส่งแบบข้อความจาก LocalStorage
-        const savedAddress = localStorage.getItem('last_saved_address') || '';
+        // 2. ดึงข้อมูลสมุดที่อยู่จากตาราง user_addresses
+        const { data: userAddresses } = await supabase
+          .from('user_addresses')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('is_default', { ascending: false })
+          .order('created_at', { ascending: false });
 
-        // 3. กำหนดค่าลงในแบบฟอร์ม
-        setFormData(prev => ({
-          ...prev,
-          name: profile?.name || currentUser.user_metadata?.name || currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || '',
-          phone: profile?.phone || currentUser.phone || currentUser.user_metadata?.phone || '',
-          address: savedAddress,
-        }));
+        if (userAddresses && userAddresses.length > 0) {
+          setAddresses(userAddresses);
+          const defaultAddr = userAddresses[0];
+          setSelectedAddressId(defaultAddr.id);
 
-        // 4. ถ้ามีพิกัด ให้ขยับหมุดไปที่เดิม
-        if (profile?.lat && profile?.lng) {
-          setLocation({ lat: Number(profile.lat), lng: Number(profile.lng) });
+          setFormData(prev => ({
+            ...prev,
+            name: profile?.name || currentUser.user_metadata?.name || currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || '',
+            phone: profile?.phone || currentUser.phone || currentUser.user_metadata?.phone || '',
+            address: defaultAddr.address_text,
+          }));
+
+          setLocation({ lat: defaultAddr.lat, lng: defaultAddr.lng });
           setIsLocating(false);
           hasSavedLocation = true;
+        } else {
+          // 3. Fallback ดึงที่อยู่จัดส่งแบบข้อความจาก LocalStorage
+          const savedAddress = localStorage.getItem('last_saved_address') || '';
+          setFormData(prev => ({
+            ...prev,
+            name: profile?.name || currentUser.user_metadata?.name || currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || '',
+            phone: profile?.phone || currentUser.phone || currentUser.user_metadata?.phone || '',
+            address: savedAddress,
+          }));
+
+          if (profile?.lat && profile?.lng) {
+            setLocation({ lat: Number(profile.lat), lng: Number(profile.lng) });
+            setIsLocating(false);
+            hasSavedLocation = true;
+          }
         }
       }
 
@@ -220,7 +256,52 @@ export default function CheckoutPage() {
       setIsAuthChecking(false);
     };
     checkAuthAndProfile();
-  }, [items, router, supabase.auth, isSuccess, isMounted]); // เพิ่ม isMounted ใน Dependency Array
+  }, [items, router, supabase, isSuccess, isMounted]); // เพิ่ม isMounted ใน Dependency Array
+
+  const handleSelectAddress = (addr: Address) => {
+    setSelectedAddressId(addr.id);
+    setFormData(prev => ({ ...prev, address: addr.address_text }));
+    setLocation({ lat: addr.lat, lng: addr.lng });
+  };
+
+  // ฟังก์ชันดึงพิกัดปัจจุบันและแปลงเป็นที่อยู่
+  const handleGetCurrentLocation = () => {
+    if (navigator.geolocation) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          handleLocationChangeAndFetchAddress(position.coords.latitude, position.coords.longitude);
+          setIsLocating(false);
+        },
+        (error) => {
+          console.warn('Geolocation error:', error);
+          alert('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      alert('เบราว์เซอร์ของคุณไม่รองรับการดึงตำแหน่งปัจจุบัน');
+    }
+  };
+
+  // ฟังก์ชันอัปเดตพิกัดพร้อมดึงที่อยู่จาก OpenStreetMap (Reverse Geocoding)
+  const handleLocationChangeAndFetchAddress = async (lat: number, lng: number) => {
+    setLocation({ lat, lng });
+    setSelectedAddressId(null);
+
+    try {
+      // ดึงที่อยู่จาก OSM Nominatim API (รองรับภาษาไทย)
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&accept-language=th`);
+      const data = await res.json();
+
+      if (data && data.display_name) {
+        setFormData(prev => ({ ...prev, address: data.display_name }));
+      }
+    } catch (err) {
+      console.error('Reverse geocoding error:', err);
+    }
+  };
 
   // ดึงข้อมูลสาขาเพื่อเอารัศมีและพิกัด
   useEffect(() => {
@@ -280,7 +361,12 @@ export default function CheckoutPage() {
 
   // ฟังก์ชันอัปเดตแบบฟอร์ม
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'phone') {
+      setFormData({ ...formData, [name]: value.replace(/\D/g, '').slice(0, 10) });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   // ฟังก์ชันหลัก: สั่งซื้อและบันทึกลง Database
@@ -368,6 +454,18 @@ export default function CheckoutPage() {
 
         if (deliveryMethod === 'delivery') {
           localStorage.setItem('last_saved_address', formData.address);
+
+          // ตรวจสอบและบันทึกลงสมุดที่อยู่หากเป็นลูกค้าใหม่และเปิดสวิตช์ไว้
+          if (addresses.length === 0 && saveToAddressBook) {
+            await supabase.from('user_addresses').insert({
+              user_id: user.id,
+              title: 'บ้าน', // ให้ค่าเริ่มต้นเป็นคำว่า 'บ้าน'
+              address_text: formData.address,
+              lat: location.lat,
+              lng: location.lng,
+              is_default: true
+            });
+          }
         }
       }
 
@@ -458,29 +556,6 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-6">ข้อมูลผู้ติดต่อ</h2>
-
-            <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อ" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
-                  <input required type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="08X-XXX-XXXX" />
-                </div>
-              </div>
-              {deliveryMethod === 'delivery' && (
-                <div className="animate-in fade-in zoom-in-95 duration-300 mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (รายละเอียด)</label>
-                  <textarea required name="address" value={formData.address} onChange={handleChange} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
-                </div>
-              )}
-            </form>
-          </div>
-
           {/* กล่องเลือกรอบจัดส่ง */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">{deliveryMethod === 'delivery' ? 'เลือกรอบจัดส่งสินค้า' : 'เลือกเวลาเข้ามารับสินค้า'}</h2>
@@ -524,6 +599,65 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
+          
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-6">ข้อมูลผู้ติดต่อ</h2>
+
+            <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
+                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อ" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
+                  <input required type="tel" name="phone" pattern="^0[0-9]{9}$" title="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก ที่ขึ้นต้นด้วย 0" maxLength={10} value={formData.phone} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="08XXXXXXXX" />
+                </div>
+              </div>
+              {deliveryMethod === 'delivery' && (
+                <div className="animate-in fade-in zoom-in-95 duration-300 mt-4 space-y-4">
+                  {addresses.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">เลือกจากสมุดที่อยู่</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {addresses.map((addr) => (
+                          <div
+                            key={addr.id}
+                            onClick={() => handleSelectAddress(addr)}
+                            className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedAddressId === addr.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:border-blue-300'
+                              }`}
+                          >
+                            <div className="flex items-center gap-2 font-bold text-gray-800 text-sm mb-1">
+                              {addr.title === 'บ้าน' ? <Home className="w-4 h-4 text-blue-500" /> : addr.title === 'ร้านขายของ' ? <Store className="w-4 h-4 text-emerald-500" /> : <MapPinIcon className="w-4 h-4 text-orange-500" />}
+                              {addr.title}
+                            </div>
+                            <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">{addr.address_text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (รายละเอียด)</label>
+                    <textarea required name="address" value={formData.address} onChange={(e) => { handleChange(e); setSelectedAddressId(null); }} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
+                  </div>
+
+                  {user && addresses.length === 0 && (
+                    <label className="flex items-center cursor-pointer gap-2 mt-3 select-none">
+                      <div className="relative">
+                        <input type="checkbox" className="sr-only" checked={saveToAddressBook} onChange={(e) => setSaveToAddressBook(e.target.checked)} />
+                        <div className={`block w-10 h-6 rounded-full transition-colors ${saveToAddressBook ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                        <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${saveToAddressBook ? 'transform translate-x-4' : ''}`}></div>
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">บันทึกเป็นที่อยู่จัดส่งหลักในสมุดที่อยู่</span>
+                    </label>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
+
+
 
           {deliveryMethod === 'delivery' ? (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 animate-in fade-in zoom-in-95 duration-300">
@@ -535,10 +669,23 @@ export default function CheckoutPage() {
                     <p className="text-blue-600 font-medium animate-pulse">📍 กำลังค้นหาตำแหน่งปัจจุบันของคุณ...</p>
                   </div>
                 ) : (
-                  <CheckoutMap
-                    initialPosition={[location.lat, location.lng]}
-                    onLocationChange={(lat, lng) => setLocation({ lat, lng })}
-                  />
+                  <>
+                    <CheckoutMap
+                      initialPosition={[location.lat, location.lng]}
+                      onLocationChange={handleLocationChangeAndFetchAddress}
+                      branchLocation={branchData?.lat && branchData?.lng ? [Number(branchData.lat), Number(branchData.lng)] : undefined}
+                      serviceRadius={serviceRadius}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleGetCurrentLocation}
+                      className="absolute bottom-4 right-4 z-[400] bg-white text-blue-600 p-3 rounded-full shadow-lg border border-gray-200 hover:bg-blue-50 transition-all flex items-center justify-center active:scale-95"
+                      title="ตำแหน่งปัจจุบัน"
+                    >
+                      <Navigation className="w-5 h-5" />
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -595,42 +742,43 @@ export default function CheckoutPage() {
                 const step = item.step_value || 1;
                 const min = item.min_value || 1;
                 const displayQuantity = Number.isInteger(item.quantity) ? item.quantity.toString() : item.quantity.toFixed(2).replace(/\.?0+$/, '');
-                
+
                 return (
-                <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 pr-4">
-                      <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
-                      <div className="text-sm font-semibold text-blue-600 mt-1">฿{item.price.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</div>
+                  <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 pr-4">
+                        <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
+                        <div className="text-sm font-semibold text-blue-600 mt-1">฿{item.price.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</div>
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        ฿{(item.price * item.quantity).toLocaleString()}
+                      </div>
                     </div>
-                    <div className="font-semibold text-gray-800">
-                      ฿{(item.price * item.quantity).toLocaleString()}
+                    {/* ส่วนควบคุมจำนวนสินค้า */}
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 w-fit">
+                        <button type="button" title="ลดจำนวน" onClick={() => {
+                          const nextQuantity = Number((item.quantity - step).toFixed(2));
+                          if (nextQuantity >= min) {
+                            updateQuantity(item.id, nextQuantity);
+                          } else {
+                            removeItem(item.id);
+                          }
+                        }} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="min-w-[1.5rem] px-1 text-center font-semibold text-sm">{displayQuantity}</span>
+                        <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, Number((item.quantity + step).toFixed(2)))} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium">
+                        <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">ลบ</span>
+                      </button>
                     </div>
                   </div>
-                  {/* ส่วนควบคุมจำนวนสินค้า */}
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 w-fit">
-                      <button type="button" title="ลดจำนวน" onClick={() => {
-                        const nextQuantity = Number((item.quantity - step).toFixed(2));
-                        if (nextQuantity >= min) {
-                          updateQuantity(item.id, nextQuantity);
-                        } else {
-                          removeItem(item.id);
-                        }
-                      }} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="min-w-[1.5rem] px-1 text-center font-semibold text-sm">{displayQuantity}</span>
-                      <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, Number((item.quantity + step).toFixed(2)))} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium">
-                      <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">ลบ</span>
-                    </button>
-                  </div>
-                </div>
-              )})}
+                )
+              })}
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-3 mb-6">

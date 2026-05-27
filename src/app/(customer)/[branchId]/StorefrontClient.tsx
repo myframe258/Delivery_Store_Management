@@ -1,0 +1,484 @@
+'use client';
+
+import { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart, Plus, Minus } from 'lucide-react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { useCartStore } from '@/store/cartStore';
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string | null;
+  category_id: string | null;
+  stock_count: number;
+  is_track_stock?: boolean;
+  unit_name?: string;
+  step_value?: number;
+  min_value?: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+}
+
+interface StorefrontClientProps {
+  products: Product[];
+  categories: Category[];
+  branchId: string;
+}
+
+export default function StorefrontClient({ products, categories, branchId }: StorefrontClientProps) {
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(20);
+  const [isMounted, setIsMounted] = useState(false);
+  const [cartAnimation, setCartAnimation] = useState(false);
+  const [prevItemCount, setPrevItemCount] = useState(0);
+
+  // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
+  const cartItems = useCartStore((state) => state.items || []);
+  const addItem = useCartStore((state: any) => state.addItem || state.addToCart);
+  const updateQuantity = useCartStore((state: any) => state.updateQuantity || state.updateItem);
+  const removeItem = useCartStore((state: any) => state.removeItem || state.removeFromCart);
+  const branchCartItems = cartItems.filter((item) => item.branchId === branchId);
+  
+  // จัดการปัญหาทศนิยม (Floating Point Issue) ด้วยการปัดเศษ
+  const totalItems = Number(branchCartItems.reduce((sum, item) => sum + item.quantity, 0).toFixed(2));
+  const totalPrice = Number(branchCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2));
+  const formatNumber = (num: number) => Number.isInteger(num) ? num.toString() : num.toFixed(2).replace(/\.?0+$/, '');
+
+  // จัดกลุ่มหมวดหมู่หลักและหมวดหมู่ย่อยให้อยู่ติดกัน
+  const rootCategories = categories.filter(c => !c.parent_id);
+  const getChildren = (parentId: string) => categories.filter(c => c.parent_id === parentId);
+
+  // หา Root Category ID ปัจจุบัน (เพื่อให้รู้ว่าควรเปิด Subcategories ของหมวดหมู่ไหน)
+  const activeCatObj = categories.find(c => c.id === selectedCategory);
+  const activeRootCategoryId = activeCatObj?.parent_id ? activeCatObj.parent_id : activeCatObj?.id || null;
+
+  // รีเซ็ตจำนวนที่แสดงผลเมื่อเปลี่ยนหมวดหมู่หรือค้นหา
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [selectedCategory, searchQuery]);
+
+  // ป้องกันหน้าเว็บกระตุก (Hydration Mismatch) ระหว่าง Server กับ Client
+  useEffect(() => {
+    setIsMounted(true);
+    setPrevItemCount(totalItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ดักจับเมื่อจำนวนสินค้าเพิ่มขึ้น เพื่อเล่นแอนิเมชัน (เช่น หยิบลงตะกร้า)
+  useEffect(() => {
+    if (isMounted && totalItems > prevItemCount) {
+      setCartAnimation(true);
+      // ปิดแอนิเมชันหลังจาก 500ms
+      const timer = setTimeout(() => {
+        setCartAnimation(false);
+      }, 500);
+      setPrevItemCount(totalItems);
+      return () => clearTimeout(timer);
+    } else if (totalItems !== prevItemCount) {
+      setPrevItemCount(totalItems);
+    }
+  }, [totalItems, prevItemCount, isMounted]);
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // กรองสินค้าแบบเรียลไทม์
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      let matchCategory = true;
+      if (selectedCategory) {
+        // หากเลือกหมวดหมู่หลัก ให้ดึงสินค้าของหมวดหมู่ย่อยใต้ตัวมันออกมาแสดงด้วย
+        const childIds = categories.filter(c => c.parent_id === selectedCategory).map(c => c.id);
+        matchCategory = p.category_id === selectedCategory || (p.category_id !== null && childIds.includes(p.category_id));
+      }
+      
+      const matchSearch =
+        p.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (p.description?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ?? false);
+      return matchCategory && matchSearch;
+    });
+  }, [products, selectedCategory, deferredSearchQuery]);
+
+  // สินค้าที่จะแสดงตามจำนวน Load More
+  const visibleProducts = filteredProducts.slice(0, visibleCount);
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + 20);
+  };
+
+  return (
+    <div className="w-full flex flex-col lg:flex-row gap-8 items-start relative">
+      
+      {/* --- Mobile: Sticky Tab & Search --- */}
+      <div className="lg:hidden sticky top-14 md:top-16 z-30 bg-gray-50 pt-2 pb-3 -mx-6 px-6 w-[calc(100%+3rem)] space-y-3 shadow-sm border-b border-gray-200/60">
+        {/* Mobile Search */}
+        <div className="relative w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="ค้นหาสินค้า..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+          />
+        </div>
+        
+        {/* Mobile Category */}
+        {categories && categories.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {/* แถวที่ 1: หมวดหมู่หลัก (Root Categories) */}
+            <div className="overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className="flex items-center gap-2 w-max pb-1">
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className={`flex-shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === null ? 'bg-slate-800 text-white shadow-md border border-slate-800' : 'bg-white text-slate-600 border border-slate-200 active:scale-95'
+                  }`}
+                >
+                  ทั้งหมด
+                </button>
+                {rootCategories.map((cat) => {
+                  const isRootActive = activeRootCategoryId === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`flex-shrink-0 whitespace-nowrap px-5 py-2 rounded-full text-sm transition-all ${
+                        isRootActive ? 'bg-blue-600 text-white shadow-md border border-blue-600 font-bold' : 'bg-white text-slate-800 border border-slate-200 font-medium active:scale-95'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* แถวที่ 2: หมวดหมู่ย่อย (Sub Categories - แสดงเฉพาะเมื่อเลือกหมวดหมู่หลักที่มีลูก) */}
+            {activeRootCategoryId && getChildren(activeRootCategoryId).length > 0 && (
+              <div className="overflow-x-auto scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] animate-in slide-in-from-top-2 fade-in duration-200">
+                <div className="flex items-center gap-2 w-max pb-1">
+                  <button
+                    onClick={() => setSelectedCategory(activeRootCategoryId)}
+                    className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs transition-all ${
+                      selectedCategory === activeRootCategoryId ? 'bg-slate-700 text-white shadow-sm font-bold border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-200 active:scale-95'
+                    }`}
+                  >
+                    รวม {rootCategories.find(c => c.id === activeRootCategoryId)?.name}
+                  </button>
+                  {getChildren(activeRootCategoryId).map((subCat) => {
+                    const isSelected = selectedCategory === subCat.id;
+                    return (
+                      <button
+                        key={subCat.id}
+                        onClick={() => setSelectedCategory(subCat.id)}
+                        className={`flex-shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs transition-all ${
+                          isSelected ? 'bg-slate-700 text-white shadow-sm font-bold border border-slate-700' : 'bg-white text-slate-600 border border-slate-200 border-dashed active:scale-95'
+                        }`}
+                      >
+                        {subCat.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* --- Desktop: Sticky Sidebar --- */}
+      <aside className="hidden lg:flex flex-col w-64 flex-shrink-0 sticky top-24 h-[calc(100vh-8rem)] overflow-y-auto pr-4 space-y-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+        {/* Desktop Search */}
+        <div className="space-y-3">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <Search className="w-5 h-5" /> ค้นหาสินค้า
+          </h3>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="ชื่อสินค้า..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-4 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            />
+          </div>
+        </div>
+
+        {/* Desktop Category */}
+        <div className="space-y-3">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <LayoutGrid className="w-5 h-5" /> หมวดหมู่
+          </h3>
+          <div className="flex flex-col space-y-1">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                selectedCategory === null
+                  ? 'bg-slate-800 text-white shadow-md'
+                  : 'text-slate-600 hover:bg-slate-200/50'
+              }`}
+            >
+              ทั้งหมด
+            </button>
+            {rootCategories.map((rootCat) => {
+              const isRootActive = activeRootCategoryId === rootCat.id;
+              const isExactlySelected = selectedCategory === rootCat.id;
+              const children = getChildren(rootCat.id);
+              
+              return (
+                <div key={rootCat.id} className="flex flex-col space-y-1">
+                  <button
+                    onClick={() => setSelectedCategory(rootCat.id)}
+                    className={`w-full flex justify-between items-center px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      isExactlySelected ? 'bg-blue-600 text-white shadow-md' : isRootActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    <span>{rootCat.name}</span>
+                    {children.length > 0 && <ChevronDown className={`w-4 h-4 transition-transform ${isRootActive ? 'rotate-180' : ''}`} />}
+                  </button>
+                  
+                  {/* แสดง Subcategories เมื่อ Root ถูกเลือกแบบ Accordion */}
+                  {isRootActive && children.length > 0 && (
+                    <div className="pl-4 pr-2 py-1 flex flex-col space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                      {children.map((subCat) => (
+                        <button
+                          key={subCat.id}
+                          onClick={() => setSelectedCategory(subCat.id)}
+                          className={`w-full text-left px-4 py-2 rounded-lg text-xs font-medium transition-colors relative before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1.5 before:h-1.5 before:rounded-full ${
+                            selectedCategory === subCat.id ? 'bg-slate-800 text-white shadow-sm before:bg-white' : 'text-slate-600 hover:bg-slate-100 before:bg-slate-300'
+                          }`}
+                        >
+                          {subCat.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </aside>
+
+      {/* --- Main Content: Product Grid --- */}
+      {/* หากมีของในตะกร้า จะเพิ่ม Padding ด้านล่าง (pb-28) ป้องกันปุ่มลอยบังปุ่มโหลดเพิ่มเติมบนมือถือ */}
+      <main className={`flex-1 w-full min-w-0 flex flex-col ${isMounted && totalItems > 0 ? 'pb-28 lg:pb-8' : 'pb-8'}`}>
+        
+        {/* Meta info */}
+        <div className="hidden lg:flex justify-between items-center mb-6 text-sm text-slate-500">
+          <p>
+            พบสินค้า <strong>{filteredProducts.length}</strong> รายการ
+            {searchQuery && <span> สำหรับ "{searchQuery}"</span>}
+          </p>
+        </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className="w-full text-center py-20 bg-white rounded-3xl shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="w-10 h-10 text-slate-300" />
+            </div>
+            <p className="text-slate-500 text-lg font-medium">ไม่พบสินค้าที่คุณค้นหา</p>
+            <button 
+              onClick={() => { setSearchQuery(''); setSelectedCategory(null); }}
+              className="mt-4 px-6 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+            >
+              ล้างการค้นหา
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            {visibleProducts.map((product) => {
+              // ลอจิกคำนวณสถานะสต็อกและตะกร้า
+              const isOutOfStock = product.is_track_stock !== false && product.stock_count <= 0;
+              const isLowStock = product.is_track_stock !== false && product.stock_count > 0 && product.stock_count < 5;
+              const cartItem = branchCartItems.find((item: any) => item.id === product.id);
+              const quantity = cartItem ? cartItem.quantity : 0;
+              const step = product.step_value || 1;
+              const min = product.min_value || 1;
+              const displayQuantity = Number.isInteger(quantity) ? quantity.toString() : quantity.toFixed(2).replace(/\.?0+$/, '');
+
+              return (
+              <div 
+                key={product.id} 
+                className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 h-full group relative ${isOutOfStock ? 'border-gray-200 opacity-80' : 'border-slate-200 hover:shadow-lg hover:border-blue-300 hover:-translate-y-1'}`}
+              >
+                {/* Visual Badges (บ่งบอกประเภทหน่วยนับ) */}
+                <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                  {step < 1 ? (
+                    <span className="bg-blue-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">⚖️ ชั่งตามน้ำหนัก</span>
+                  ) : (
+                    <span className="bg-slate-800/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">📦 แพ็ก / ชิ้น</span>
+                  )}
+                </div>
+
+                <div className="w-full h-40 sm:h-48 bg-slate-50 relative flex-shrink-0 overflow-hidden">
+                  {/* Overlay กรณีสินค้าหมด */}
+                  {isOutOfStock && (
+                    <div className="absolute inset-0 bg-black/40 z-20 flex items-center justify-center backdrop-blur-[1px]">
+                      <span className="bg-red-600 text-white font-bold px-4 py-1.5 rounded-lg shadow-lg rotate-[-10deg] text-sm sm:text-base border-2 border-white">
+                        สินค้าหมด
+                      </span>
+                    </div>
+                  )}
+                  {product.image_url ? (
+                    <Image 
+                      src={product.image_url} 
+                      alt={product.name} 
+                      fill 
+                      sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                      className={`object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'group-hover:scale-105'}`} 
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
+                      <Package className="w-8 h-8 mb-2 opacity-50" />
+                      <span className="text-xs font-medium">ไม่มีรูปภาพ</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="p-3 sm:p-5 flex flex-col flex-grow">
+                  <h2 className="font-semibold text-sm sm:text-lg text-slate-800 mb-1 line-clamp-2 leading-tight" title={product.name}>
+                    {product.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 line-clamp-2 leading-relaxed flex-grow">
+                    {product.description || '-'}
+                  </p>
+                  
+                  <div className="mt-auto space-y-3 pt-3">
+                    <div className="flex items-end justify-between gap-1">
+                      <span className="font-bold text-base sm:text-xl text-blue-600 truncate">
+                        ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
+                      </span>
+                      {product.is_track_stock !== false && (
+                        <span className={`shrink-0 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-md ${
+                          isOutOfStock ? 'text-red-700 bg-red-100' :
+                          isLowStock ? 'text-orange-700 bg-orange-100' :
+                          'text-emerald-700 bg-emerald-100'
+                        }`}>
+                          {isOutOfStock ? 'สินค้าหมด' : 
+                           isLowStock ? `ใกล้หมด! เหลือ ${product.stock_count} ${product.unit_name || ''}` : 
+                           `คงเหลือ ${product.stock_count} ${product.unit_name || ''}`}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Interactive UI: สลับสถานะปุ่มสั่งซื้อและจำนวน */}
+                    {isOutOfStock ? (
+                      <button disabled className="w-full bg-slate-100 text-slate-400 font-bold py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm cursor-not-allowed border border-slate-200">
+                        สินค้าหมด
+                      </button>
+                    ) : quantity > 0 ? (
+                      <div className="w-full flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl overflow-hidden h-9 sm:h-11 shadow-sm">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const nextQuantity = Number((quantity - step).toFixed(2));
+                            if (nextQuantity >= min) {
+                              updateQuantity(product.id, nextQuantity);
+                            } else {
+                              removeItem(product.id);
+                            }
+                          }}
+                          title="ลดจำนวน"
+                          className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"
+                        >
+                          <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                        <span className="font-bold text-sm sm:text-base text-blue-800 min-w-[2rem] px-1 text-center select-none">
+                          {displayQuantity}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            updateQuantity(product.id, Number((quantity + step).toFixed(2)));
+                          }}
+                          title="เพิ่มจำนวน"
+                          className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          addItem({ ...product, branchId, quantity: min });
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group"
+                      >
+                        <ShoppingCart className="w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-110 transition-transform" />
+                        <span>เพิ่มลงตะกร้า</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )})}
+          </div>
+        )}
+
+        {/* Load More Button */}
+        {visibleCount < filteredProducts.length && (
+          <div className="w-full flex justify-center mt-10">
+            <button 
+              onClick={handleLoadMore} 
+              className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-8 py-3 rounded-full font-medium hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-all shadow-sm active:scale-95"
+            >
+              โหลดสินค้าเพิ่มเติม <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </main>
+
+      {/* --- Desktop: Cart Notification Toast --- */}
+      {isMounted && (
+        <div 
+          className={`hidden lg:flex fixed top-24 right-8 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl shadow-lg z-50 transition-all duration-300 items-center gap-3 ${
+            cartAnimation ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+          }`}
+        >
+          <div className="bg-emerald-100 p-2 rounded-full">
+            <ShoppingCart className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-emerald-900">หยิบสินค้าลงตะกร้าแล้ว</p>
+            <p className="text-xs text-emerald-700 mt-0.5">ยอดรวม {formatNumber(totalItems)} รายการ (฿{totalPrice.toLocaleString()})</p>
+          </div>
+        </div>
+      )}
+
+      {/* --- Floating Cart Button (Mobile & Tablet) --- */}
+      {isMounted && totalItems > 0 && (
+        // ใช้ pointer-events-none ที่ container เพื่อให้กดทะลุพื้นที่ว่างได้ แต่ใช้ auto กับตัว Link
+        <div className="lg:hidden fixed bottom-6 left-0 right-0 px-4 sm:px-6 z-50 pointer-events-none">
+          <Link href={`/checkout?branchId=${branchId}`} className="pointer-events-auto block max-w-md mx-auto">
+            <div className={`bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-600/40 p-4 flex items-center justify-between active:scale-95 transition-all duration-300 ${cartAnimation ? 'scale-105 ring-4 ring-blue-400/40 bg-blue-500' : 'scale-100'}`}>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0">
+                  <ShoppingCart className={`w-6 h-6 ${cartAnimation ? 'animate-bounce' : ''}`} />
+                  <span className={`absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full border-2 border-white transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
+                    {formatNumber(totalItems)}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-semibold text-sm">ดูตะกร้าสินค้า</span>
+                </div>
+              </div>
+              <div className="font-bold text-lg">
+                ฿{totalPrice.toLocaleString()}
+              </div>
+            </div>
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}

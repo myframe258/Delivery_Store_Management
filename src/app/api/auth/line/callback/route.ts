@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -48,20 +48,7 @@ export async function GET(request: Request) {
     cookieStore.delete('returnTo');
     
     // Client สำหรับดึง Session ลงเบราว์เซอร์ผู้ใช้
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll(); },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-            } catch (error) {}
-          },
-        },
-      }
-    );
+    const supabase = await createClient();
 
     // 4. พยายามเข้าสู่ระบบ
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
@@ -69,7 +56,7 @@ export async function GET(request: Request) {
     // 5. หากเข้าสู่ระบบไม่ได้ (แปลว่าผู้ใช้ใหม่) ให้สร้างบัญชี
     if (signInError && signInError.message.includes('Invalid login credentials')) {
       // ใช้ Service Role ข้ามกฎความปลอดภัย เพื่อบังคับสร้างบัญชี
-      const supabaseAdmin = createClient(
+      const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       );

@@ -1,6 +1,6 @@
-# Product Requirements Document (PRD) - Version 4
+# Product Requirements Document (PRD) - Version 5
 **Project Name:** Multi-Branch Store & Batch Delivery Management System  
-**Document Status:** Latest Production Draft
+**Document Status:** Latest Production Draft (Updated with Audit Report)
 
 ---
 
@@ -27,7 +27,7 @@
 - **Auth Boundary (จุดบังคับล็อกอิน):** 
   ระบบจะดักจับและบังคับ Login **เฉพาะเมื่อกด "ยืนยันการสั่งซื้อ" ในหน้า `/checkout` เท่านั้น** 
   - ต้องมีการจดจำ State ของตะกร้าสินค้า (ผ่าน `cartStore`)
-  - รองรับระบบ Query Parameter `?returnTo=/checkout` เพื่อให้ลูกค้าถูกเด้งกลับมาจ่ายเงินต่อได้ทันทีหลังล็อกอินสำเร็จ ป้องกัน Conversion Drop
+  - **[Critical UX]** ระบบ `/login` ต้องดักจับและรองรับ Query Parameter `?returnTo=/checkout` เพื่อให้ลูกค้าถูกเด้งกลับมาจ่ายเงินต่อได้ทันทีหลังล็อกอินสำเร็จ ป้องกันไม่ให้โดน Redirect ไปหน้า Dashboard ทั่วไป (Conversion Drop)
 
 - **Role-Based Redirect (การแยกเส้นทางหลัง Login):**
   เมื่อเข้าสู่ระบบสำเร็จ ระบบจะตรวจสอบสิทธิ์ (`role`) และเปลี่ยนหน้าอัตโนมัติ:
@@ -48,6 +48,7 @@
 
 ### 4.2 สำหรับ Admin (Management Dashboard)
 - **[Done 100%] Responsive Navbar:** แท็บเมนูสลับอัตโนมัติตาม Role ของผู้ใช้งาน รองรับ Mobile Layout อย่างสมบูรณ์ (SafeArea `pt-14`, `pb-16` ป้องกันการทับซ้อนของ UI)
+  *(หมายเหตุ: ต้องเพิ่มเมนู "จัดการสาขา" และ "จัดการผู้ใช้" สำหรับ Super Admin ลงใน Navbar เพื่อลด UX Gap สำหรับผู้ดูแลระบบ)*
 - **[Done 100%] Branch Admin Batching:** Interactive Map ที่ให้แอดมินลากหรือคลิกเลือกออเดอร์ที่ค้างส่งบนแผนที่ เพื่อสร้างเป็นรอบจัดส่ง (Batch) ได้ทันที
 - **[Done 100%] Route Optimization API:** ระบบคำนวณเส้นทางและจัดลำดับจุดส่งอัตโนมัติด้วย Google Maps Directions API (TSP)
 - **[Done 100%] Branch Inventory:** ระบบให้ผู้จัดการสาขาอัปเดตสต็อกและสถานะเปิด/ปิดการขายสินค้า
@@ -62,17 +63,13 @@
 
 ## 5. แผนการพัฒนาใน Sprint ถัดไป (Next Sprints & Roadmap)
 
-**Sprint ถัดไป (High Priority): Order Tracking & Super Admin Management**
-- สร้างหน้าระบบหลังบ้านให้ Super Admin สามารถจัดการเพิ่ม/ลดสาขา (`/super-admin/branches`) ได้
-- สร้างหน้าระบบจัดการพนักงาน (`/super-admin/users`) สำหรับมอบหมายสิทธิ์ (Role) และสาขาที่สังกัดให้พนักงาน
-- พัฒนาหน้าติดตามสถานะออเดอร์สำหรับลูกค้า (Order Tracking) ให้เห็นความคืบหน้าแบบ Real-time
-
-**Sprint ถัดไป (Medium Priority): Analytics & Dashboard**
+**ลำดับที่ 1 (High Priority): Super Admin Master Data**
 - เพิ่มหน้าต่างสรุปยอดขายและการจัดส่ง (Analytics) สำหรับ Branch Admin และ Super Admin
 
-**Technical Debt Clean-up (งานปรับปรุงโค้ดหลังบ้าน):**
-- ยกเลิกการใช้ `any` ใน TypeScript โดยดึงระบบ **Supabase Database Types** มาครอบตัวแปรทั้งหมดเพื่อรับประกัน Type Safety
-- ตรวจสอบ Row Level Security (RLS) เพิ่มเติมสำหรับตารางที่เกี่ยวข้องกับการเงินหรือการตั้งค่าสาขา
+**Technical Debt & Security Clean-up (ด่วนมาก):**
+- **🚨 Row Level Security (RLS):** ต้องรีบเพิ่ม RLS Policy ใน Supabase ทันที เพื่อป้องกัน Hacker ยิง API ฝั่ง Client-side (เช่น `.insert()`, `.update()` ในหน้า Batching/Inventory) ข้ามสาขาหรือเปลี่ยนแปลงข้อมูลสำคัญ
+- **Type Safety:** ยกเลิกการใช้ `any` ใน TypeScript (เช่น `[branchId]/page.tsx`, `RiderBatchClient.tsx`) โดยใช้คำสั่ง Generate Types จาก Supabase Database มาครอบตัวแปรทั้งหมดเพื่อรับประกัน Type Safety
+- **Role Syncing Optimization:** ตรวจสอบ PostgreSQL Trigger ที่ทำหน้าที่ Sync `role` ลง `raw_app_meta_data` ให้สมบูรณ์ 100% เพื่อที่จะได้ลบการยิง Query ดึง Role ซ้ำซ้อนใน `Navbar.tsx` ช่วยลดภาระฐานข้อมูล
 
 ---
 

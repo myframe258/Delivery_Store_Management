@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
     // 1. ตรวจสอบสิทธิ์ว่าผู้เรียก API นี้เป็น 'super_admin' หรือไม่
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createClient();
     
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -28,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     // 3. สร้าง Supabase Admin Client โดยใช้ Service Role Key (เพื่อให้มีสิทธิ์สร้าง User และข้าม RLS)
-    const supabaseAdmin = createClient(
+    const supabaseAdmin = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
       {

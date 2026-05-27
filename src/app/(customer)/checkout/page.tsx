@@ -65,6 +65,10 @@ export default function CheckoutPage() {
     address: '',
   });
 
+  // เพิ่ม State สำหรับระบบชำระเงิน
+  const [paymentMethod, setPaymentMethod] = useState<'promptpay' | 'cod'>('promptpay');
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+
   // Address Book States
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -397,6 +401,29 @@ export default function CheckoutPage() {
         setIsSubmitting(false);
         return;
       }
+
+      // --- ระบบอัปโหลดสลิป ---
+      let paymentSlipUrl = null;
+      let paymentStatus = paymentMethod === 'promptpay' ? 'pending_verification' : 'pending_payment';
+
+      if (paymentMethod === 'promptpay') {
+        if (!slipFile) {
+          alert('กรุณาแนบสลิปโอนเงิน');
+          setIsSubmitting(false);
+          return;
+        }
+        const fileExt = slipFile.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('slips')
+          .upload(fileName, slipFile);
+
+        if (uploadError) throw new Error('อัปโหลดสลิปไม่สำเร็จ: ' + uploadError.message);
+        const { data: publicUrlData } = supabase.storage.from('slips').getPublicUrl(uploadData.path);
+        paymentSlipUrl = publicUrlData.publicUrl;
+      }
+      // ----------------------
+
       // 1. บันทึกข้อมูลลงตาราง orders
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
@@ -409,6 +436,9 @@ export default function CheckoutPage() {
           delivery_date: deliveryDate,
           delivery_slot: deliverySlot,
           delivery_method: deliveryMethod, // เก็บรูปแบบการรับของ
+          payment_method: paymentMethod, // เพิ่มช่องทางชำระเงิน
+          payment_status: paymentStatus, // เพิ่มสถานะชำระเงิน
+          payment_slip_url: paymentSlipUrl, // เพิ่ม URL สลิป
           customer_info: {
             name: formData.name,
             phone: formData.phone,
@@ -730,6 +760,43 @@ export default function CheckoutPage() {
               </div>
             </div>
           )}
+
+          {/* ส่วนเลือกช่องทางชำระเงิน */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">ช่องทางการชำระเงิน</h2>
+            <div className="space-y-3">
+              <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition ${paymentMethod === 'promptpay' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                <input type="radio" name="paymentMethod" value="promptpay" className="mr-3" checked={paymentMethod === 'promptpay'} onChange={() => setPaymentMethod('promptpay')} />
+                <span className="font-medium">โอนเงินผ่านบัญชีธนาคาร (PromptPay)</span>
+              </label>
+              <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition ${paymentMethod === 'cod' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                <input type="radio" name="paymentMethod" value="cod" className="mr-3" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />
+                <span className="font-medium">{deliveryMethod === 'delivery' ? 'ชำระเงินปลายทาง (COD)' : 'ชำระเงินที่สาขา (Pay at Store)'}</span>
+              </label>
+            </div>
+
+            {paymentMethod === 'promptpay' && (
+              <div className="mt-4 bg-gray-50 p-6 rounded-xl border border-gray-200 text-center animate-in fade-in zoom-in-95 duration-300">
+                <h3 className="font-semibold text-gray-700 mb-2">สแกน QR Code เพื่อโอนเงิน</h3>
+                <p className="text-xl font-bold text-blue-600 mb-4">ยอดโอน: ฿{(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</p>
+                <div className="w-48 h-48 bg-white mx-auto mb-4 border border-gray-200 flex items-center justify-center rounded-lg overflow-hidden relative shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`https://promptpay.io/0928727608/${getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)}.png`} alt="PromptPay QR Code" className="w-full h-full object-contain" />
+                </div>
+                <div className="text-left mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">แนบสลิปโอนเงิน</label>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    title="เลือกไฟล์สลิปโอนเงิน"
+                    placeholder="เลือกไฟล์รูปภาพสลิป"
+                    onChange={(e) => setSlipFile(e.target.files?.[0] || null)} 
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ฝั่งขวา: สรุปคำสั่งซื้อ (Order Summary) */}
@@ -809,8 +876,8 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 form="checkout-form"
-                disabled={isSubmitting || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee)}
-                className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${(deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
+                disabled={isSubmitting || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) || (paymentMethod === 'promptpay' && !slipFile)}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${(deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) || (paymentMethod === 'promptpay' && !slipFile) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
                   }`}
               >
                 {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}

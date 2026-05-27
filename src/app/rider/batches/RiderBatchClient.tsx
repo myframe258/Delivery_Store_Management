@@ -123,6 +123,17 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
     setExpandedOrders(prev => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
   };
 
+  // ฟังก์ชันสร้างป้ายกำกับสำหรับ Rider
+  const getRiderPaymentBadge = (method: string, status: string) => {
+    if (method === 'cod') {
+      return <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] rounded-full font-bold border border-orange-200">เก็บเงินปลายทาง</span>;
+    }
+    if (method === 'promptpay' && status === 'paid') {
+      return <span className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-700 text-[10px] rounded-full font-bold border border-green-200">โอนเงินแล้ว</span>;
+    }
+    return null;
+  };
+
   if (batches.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-gray-500 px-4 text-center">
@@ -210,11 +221,25 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
                           </a>
                         )}
                       </div>
+              {getRiderPaymentBadge(item.orders?.payment_method, item.orders?.payment_status)}
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.orders?.customer_info?.address || 'ไม่ระบุที่อยู่'}</p>
-                      <p className="text-xs font-medium text-blue-600 mt-1">เก็บเงิน: ฿{item.orders?.total_price?.toLocaleString() || 0}</p>
+              {item.orders?.payment_method !== 'cod' && (
+                <p className="text-xs font-medium text-blue-600 mt-1">ยอดสุทธิ: ฿{item.orders?.total_price?.toLocaleString() || 0}</p>
+              )}
                     </div>
                   </div>
                 </div>
+
+        {/* ไฮไลท์พิเศษ: กล่องแจ้งเตือนเก็บเงินใหญ่ๆ (แสดงเฉพาะ COD) */}
+        {item.orders?.payment_method === 'cod' && !isDelivered && (
+          <div className="mt-2 mb-3 p-3 bg-orange-50 border-2 border-dashed border-orange-300 rounded-xl flex justify-between items-center">
+            <div className="flex items-center gap-2 text-orange-800 font-bold">
+              <span className="text-xl">💰</span>
+              <span className="text-sm">ยอดเก็บลูกค้า:</span>
+            </div>
+            <span className="text-lg font-black text-orange-600">฿{item.orders?.total_price?.toLocaleString() || 0}</span>
+          </div>
+        )}
 
                 {/* ส่วนแสดงรายละเอียดสินค้า (Toggle) */}
                 <div className="mt-3">

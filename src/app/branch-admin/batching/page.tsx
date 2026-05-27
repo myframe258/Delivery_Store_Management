@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import dynamic from 'next/dynamic';
+import AdminSlipVerification from '@/components/admin/AdminSlipVerification';
 
 // โหลด Leaflet แบบ Dynamic เพื่อป้องกันปัญหา window is not defined (SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
@@ -24,9 +25,10 @@ export default function BatchingPage() {
   const [optimizing, setOptimizing] = useState(false);
   const [riders, setRiders] = useState<any[]>([]);
   const [selectedRiderId, setSelectedRiderId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'manage' | 'verify'>('create');
   const [activeBatches, setActiveBatches] = useState<any[]>([]);
   const [groupedSlots, setGroupedSlots] = useState<any>({});
+  const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
   
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const todayObj = new Date();
@@ -84,7 +86,7 @@ export default function BatchingPage() {
         if (res.ok) {
           const data = await res.json();
           const allOrders = Object.values(data.slots).flatMap((slot: any) => slot.orders);
-          ordersData = allOrders.filter((o: any) => o.status === 'pending' && o.lat !== null && o.lng !== null);
+          ordersData = allOrders.filter((o: any) => o.status === 'pending' && o.payment_status !== 'pending_verification' && o.lat !== null && o.lng !== null);
           setGroupedSlots(data.slots || {});
         }
       } catch (err) {
@@ -115,6 +117,17 @@ export default function BatchingPage() {
         .neq('batch_status', 'completed')
         .order('created_at', { ascending: false });
       setActiveBatches(batchesData || []);
+
+      // 6. ดึงออเดอร์ที่รอตรวจสอบสลิป
+      const { data: verificationsData } = await supabase
+        .from('orders')
+        .select('id, order_code, total_price, payment_slip_url')
+        .eq('branch_id', branchId)
+        .eq('payment_status', 'pending_verification')
+        .order('created_at', { ascending: false });
+      const formattedVerifications = (verificationsData || []).map((o: any) => ({ ...o, order_code: o.order_code || o.id.slice(0, 8).toUpperCase() }));
+      setPendingVerifications(formattedVerifications);
+
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -131,7 +144,7 @@ export default function BatchingPage() {
         if (res.ok) {
           const data = await res.json();
           const allOrders = Object.values(data.slots).flatMap((slot: any) => slot.orders);
-          setOrders(allOrders.filter((o: any) => o.status === 'pending' && o.lat !== null && o.lng !== null));
+          setOrders(allOrders.filter((o: any) => o.status === 'pending' && o.payment_status !== 'pending_verification' && o.lat !== null && o.lng !== null));
           setGroupedSlots(data.slots || {});
         }
       } catch (err) {
@@ -263,6 +276,22 @@ export default function BatchingPage() {
     }
   };
 
+  // ฟังก์ชันช่วยแสดงป้ายสถานะการชำระเงิน
+  const getPaymentBadge = (method: string, status: string) => {
+    if (method === 'promptpay' && status === 'paid') {
+      return <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-[10px] rounded-full font-bold whitespace-nowrap">โอนเงินแล้ว</span>;
+    }
+    if (method === 'cod') {
+      return <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] rounded-full font-bold whitespace-nowrap">เก็บปลายทาง (COD)</span>;
+    }
+    if (method === 'pay_at_store') {
+      return <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded-full font-bold whitespace-nowrap">จ่ายที่ร้าน</span>;
+    }
+    return <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full font-bold whitespace-nowrap">
+      {status === 'pending_verification' ? 'รอตรวจสลิป' : 'รอชำระเงิน'}
+    </span>;
+  };
+
   if (!mounted || loading) {
     return <div className="p-8 text-center text-gray-500 animate-pulse">กำลังโหลดข้อมูลแผนที่และออเดอร์...</div>;
   }
@@ -287,6 +316,7 @@ export default function BatchingPage() {
         <div className="flex justify-between items-start">
           <div>
             <span className="font-semibold text-gray-800">ออเดอร์ #{order.id.slice(0, 6).toUpperCase()}</span>
+            {getPaymentBadge(order.payment_method, order.payment_status)}
             <p className="text-sm text-gray-500 mt-1">ยอดรวม: ฿{order.total_price.toLocaleString()}</p>
           </div>
           <input
@@ -312,6 +342,14 @@ export default function BatchingPage() {
         <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 w-full md:w-auto">
           <button onClick={() => setActiveTab('create')} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'create' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}>สร้างรอบส่งใหม่</button>
           <button onClick={() => setActiveTab('manage')} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'manage' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}>จัดการรอบปัจจุบัน</button>
+          <button onClick={() => setActiveTab('verify')} className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'verify' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}>
+            ตรวจสอบสลิป
+            {pendingVerifications.length > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center bg-red-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">
+                {pendingVerifications.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
         
@@ -338,7 +376,7 @@ export default function BatchingPage() {
               ) : (
                 <div className="space-y-6">
                   {Object.entries(groupedSlots).map(([slotId, slotInfo]: [string, any]) => {
-                    const slotOrders = slotInfo.orders.filter((o: any) => o.status === 'pending' && o.lat !== null && o.lng !== null);
+                    const slotOrders = slotInfo.orders.filter((o: any) => o.status === 'pending' && o.payment_status !== 'pending_verification' && o.lat !== null && o.lng !== null);
                     if (slotOrders.length === 0) return null;
                     
                     return (
@@ -479,6 +517,36 @@ export default function BatchingPage() {
                       </button>
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: ตรวจสอบสลิป (Verify) */}
+      {activeTab === 'verify' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">ตรวจสอบสลิปโอนเงิน</h2>
+              <p className="text-sm text-gray-500">ออเดอร์ที่ลูกค้าแนบสลิปแล้ว รอการยืนยันความถูกต้อง</p>
+            </div>
+          </div>
+          <div className="p-5">
+            {pendingVerifications.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">ไม่มีออเดอร์ที่รอตรวจสอบสลิปในขณะนี้</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {pendingVerifications.map((order) => (
+                  <AdminSlipVerification
+                    key={order.id}
+                    order={order}
+                    onVerificationComplete={(orderId, status) => {
+                      setPendingVerifications(prev => prev.filter(o => o.id !== orderId));
+                      fetchData(); // รีเฟรชข้อมูลเพื่อให้ออเดอร์เด้งกลับไปหน้า "สร้างรอบส่งใหม่" อัตโนมัติ
+                    }}
+                  />
                 ))}
               </div>
             )}

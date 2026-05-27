@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     // 5. ดึงข้อมูลคำสั่งซื้อของสาขานี้ ผ่าน Admin Client
     const { data: orders, error: ordersError } = await supabaseAdmin
       .from('orders')
-      .select('id, total_price, status, customer_info, delivery_slot, created_at, lat, lng')
+      .select('id, total_price, status, customer_info, delivery_slot, created_at, lat, lng, payment_method, payment_status')
       .eq('branch_id', branchId)
       .eq('delivery_date', targetDate)
       .order('created_at', { ascending: true }); // เรียงตามเวลาสั่งซื้อก่อน-หลัง

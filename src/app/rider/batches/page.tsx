@@ -43,6 +43,8 @@ export default async function RiderBatchesPage() {
           total_price,
           customer_info,
           status,
+          payment_method,
+          payment_status,
           order_items (
             quantity,
             products (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 interface Branch {
   id: number;
@@ -18,12 +19,10 @@ export default function UserCreationForm({ branches }: UserCreationFormProps) {
   const [branchId, setBranchId] = useState('');
   
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    setMessage(null);
 
     const response = await fetch('/api/admin/users', {
       method: 'POST',
@@ -40,14 +39,14 @@ export default function UserCreationForm({ branches }: UserCreationFormProps) {
     setIsLoading(false);
 
     if (response.ok) {
-      setMessage({ type: 'success', text: `สร้างบัญชี ${email} สำเร็จ!` });
+      toast.success(`สร้างบัญชี ${email} สำเร็จ!`);
       // เคลียร์ฟอร์ม
       setEmail('');
       setPassword('');
       setRole('branch_admin');
       setBranchId('');
     } else {
-      setMessage({ type: 'error', text: `เกิดข้อผิดพลาด: ${result.error}` });
+      toast.error(`เกิดข้อผิดพลาด: ${result.error}`);
     }
   };
 
@@ -102,13 +101,6 @@ export default function UserCreationForm({ branches }: UserCreationFormProps) {
           {isLoading ? 'กำลังสร้าง...' : 'สร้างบัญชี'}
         </button>
       </div>
-
-      {/* Message Area */}
-      {message && (
-        <div className={`p-4 rounded-md text-sm ${ message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }`}>
-          {message.text}
-        </div>
-      )}
     </form>
   );
 }

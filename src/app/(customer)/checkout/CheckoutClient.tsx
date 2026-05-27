@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { AlertTriangle, MapPin, CheckCircle, Navigation } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore'; // สมมติว่ามี cart store อยู่แล้วที่ path นี้
+import toast from 'react-hot-toast';
 
 // โหลด Leaflet แบบ Dynamic เพื่อป้องกัน Error 'window is not defined' บน Next.js (SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
@@ -138,11 +139,11 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
 
       // 3. หากสำเร็จ ให้ล้างตะกร้าและ Redirect
       clearCart();
-      alert(`สร้างออเดอร์สำเร็จ! หมายเลขคำสั่งซื้อ: ${result.orderId.slice(0, 8).toUpperCase()}`);
+      toast.success(`สร้างออเดอร์สำเร็จ! หมายเลขคำสั่งซื้อ: ${result.orderId.slice(0, 8).toUpperCase()}`);
       router.push(`/checkout/success?orderId=${result.orderId}`); // ไปยังหน้า Success
     } catch (error: any) {
       console.error("Failed to confirm order:", error);
-      alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      toast.error(`เกิดข้อผิดพลาด: ${error.message}`);
     } finally {
       setIsSaving(false);
     }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Check, X, ExternalLink, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface OrderData {
   id: string;
@@ -34,11 +35,11 @@ export default function AdminSlipVerification({ order, onVerificationComplete }:
 
       if (error) throw error;
 
-      alert(`อัปเดตสถานะเป็น ${status} เรียบร้อยแล้ว`);
+      toast.success(`อัปเดตสถานะเป็น ${status} เรียบร้อยแล้ว`);
       onVerificationComplete(order.id, status);
     } catch (error) {
       console.error("Update payment status error:", error);
-      alert("เกิดข้อผิดพลาดในการอัปเดตสถานะ");
+      toast.error("เกิดข้อผิดพลาดในการอัปเดตสถานะ");
     } finally {
       setIsUpdating(false);
     }

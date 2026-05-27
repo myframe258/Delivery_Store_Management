@@ -21,6 +21,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-hot-toast": "^2.6.0",
     "react-leaflet": "^5.0.0",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.13"

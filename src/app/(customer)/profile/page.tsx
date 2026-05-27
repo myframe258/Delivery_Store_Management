@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { User, Phone, MapPin, Save, ChevronLeft, Plus, Home, Store, Map as MapIcon, Edit2, Trash2, CheckCircle, X, Navigation } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
 const CheckoutMap = dynamic(() => import('@/components/maps/CheckoutMap'), {
@@ -40,6 +42,7 @@ export default function ProfilePage() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [addressForm, setAddressForm] = useState<Partial<Address>>({ title: 'บ้าน', address_text: '', is_default: false });
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState({ isOpen: false, id: '', isDefault: false });
 
   // State สำหรับพิกัดแผนที่ (Default: กรุงเทพฯ)
   const [location, setLocation] = useState<{ lat: number; lng: number }>({
@@ -110,9 +113,9 @@ export default function ProfilePage() {
         .eq('id', user.id);
 
       if (error) throw error;
-      alert('บันทึกข้อมูลส่วนตัวสำเร็จ!');
+      toast.success('บันทึกข้อมูลส่วนตัวสำเร็จ!');
     } catch (error: any) {
-      alert('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
+      toast.error('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
     } finally {
       setSavingProfile(false);
     }
@@ -141,7 +144,7 @@ export default function ProfilePage() {
           setIsLocating(false); 
         },
         () => { 
-          alert('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
+          toast.error('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
           setIsLocating(false); 
         },
         { enableHighAccuracy: true }
@@ -191,26 +194,33 @@ export default function ProfilePage() {
 
       setIsAddressModalOpen(false);
       fetchProfileAndAddresses();
+      toast.success('บันทึกที่อยู่เรียบร้อยแล้ว');
     } catch (error: any) {
-      alert('บันทึกที่อยู่ไม่สำเร็จ: ' + error.message);
+      toast.error('บันทึกที่อยู่ไม่สำเร็จ: ' + error.message);
     } finally {
       setSavingAddress(false);
     }
   };
 
-  const handleDeleteAddress = async (id: string, isDefault: boolean) => {
+  const handleDeleteAddressClick = (id: string, isDefault: boolean) => {
     if (isDefault) {
-      alert('ไม่สามารถลบที่อยู่หลักได้ กรุณาตั้งที่อยู่อื่นเป็นที่อยู่หลักก่อน');
+      toast.error('ไม่สามารถลบที่อยู่หลักได้ กรุณาตั้งที่อยู่อื่นเป็นที่อยู่หลักก่อน');
       return;
     }
-    if (!confirm('คุณต้องการลบที่อยู่นี้ใช่หรือไม่?')) return;
+    setDeleteConfirmModal({ isOpen: true, id, isDefault });
+  };
 
+  const executeDeleteAddress = async () => {
+    const { id } = deleteConfirmModal;
+    setDeleteConfirmModal({ isOpen: false, id: '', isDefault: false });
+    
     try {
       const { error } = await supabase.from('user_addresses').delete().eq('id', id);
       if (error) throw error;
       setAddresses(addresses.filter(a => a.id !== id));
+      toast.success('ลบที่อยู่เรียบร้อยแล้ว');
     } catch (error: any) {
-      alert('ลบที่อยู่ไม่สำเร็จ: ' + error.message);
+      toast.error('ลบที่อยู่ไม่สำเร็จ: ' + error.message);
     }
   };
 
@@ -296,7 +306,7 @@ export default function ProfilePage() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         {!addr.is_default && (
-                          <button type="button" onClick={() => handleDeleteAddress(addr.id, addr.is_default)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition" title="ลบ">
+                          <button type="button" onClick={() => handleDeleteAddressClick(addr.id, addr.is_default)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition" title="ลบ">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
@@ -391,6 +401,16 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* Modal ยืนยันการลบที่อยู่ */}
+      <ConfirmModal
+        isOpen={deleteConfirmModal.isOpen}
+        title="ยืนยันการลบที่อยู่"
+        message="คุณต้องการลบที่อยู่นี้ออกจากสมุดที่อยู่ใช่หรือไม่?"
+        onConfirm={executeDeleteAddress}
+        onCancel={() => setDeleteConfirmModal({ isOpen: false, id: '', isDefault: false })}
+        isDestructive={true}
+      />
     </div>
   );
 }

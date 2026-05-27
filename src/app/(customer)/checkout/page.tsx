@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
 import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info, Home, Navigation } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 // โหลด CheckoutMap แบบ Dynamic (ปิด SSR) ป้องกัน Window is not defined
 const CheckoutMap = dynamic(() => import('@/components/maps/CheckoutMap'), {
@@ -279,13 +280,13 @@ export default function CheckoutPage() {
         },
         (error) => {
           console.warn('Geolocation error:', error);
-          alert('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
+              toast.error('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
           setIsLocating(false);
         },
         { enableHighAccuracy: true }
       );
     } else {
-      alert('เบราว์เซอร์ของคุณไม่รองรับการดึงตำแหน่งปัจจุบัน');
+          toast.error('เบราว์เซอร์ของคุณไม่รองรับการดึงตำแหน่งปัจจุบัน');
     }
   };
 
@@ -376,9 +377,18 @@ export default function CheckoutPage() {
   // ฟังก์ชันหลัก: สั่งซื้อและบันทึกลง Database
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeBranchId) return alert('ไม่พบข้อมูลสาขา กรุณาเลือกสาขาใหม่');
-    if (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) return alert('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
-    if (!deliveryDate || !deliverySlot) return alert(deliveryMethod === 'delivery' ? 'กรุณาเลือกวันที่และรอบการจัดส่ง' : 'กรุณาเลือกวันที่และเวลาที่คาดว่าจะมารับสินค้า');
+    if (!activeBranchId) {
+      toast.error('ไม่พบข้อมูลสาขา กรุณาเลือกสาขาใหม่');
+      return;
+    }
+    if (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) {
+      toast.error('ที่อยู่ของคุณอยู่นอกพื้นที่ให้บริการของสาขานี้');
+      return;
+    }
+    if (!deliveryDate || !deliverySlot) {
+      toast.error(deliveryMethod === 'delivery' ? 'กรุณาเลือกวันที่และรอบการจัดส่ง' : 'กรุณาเลือกวันที่และเวลาที่คาดว่าจะมารับสินค้า');
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -395,7 +405,7 @@ export default function CheckoutPage() {
         .single();
 
       if (deliveryDate === todayStr && slotData && currentHour >= slotData.cut_off_hour) {
-        alert(deliveryMethod === 'delivery'
+        toast.error(deliveryMethod === 'delivery'
           ? 'ขออภัย รอบจัดส่งนี้ปิดรับออเดอร์สำหรับวันนี้แล้ว กรุณาเลือกรอบอื่นหรือเปลี่ยนวันจัดส่ง'
           : 'ขออภัย ช่วงเวลานี้ปิดรับออเดอร์แล้ว กรุณาเลือกเวลาอื่นหรือเปลี่ยนวันเข้ารับสินค้า');
         setIsSubmitting(false);
@@ -408,7 +418,7 @@ export default function CheckoutPage() {
 
       if (paymentMethod === 'promptpay') {
         if (!slipFile) {
-          alert('กรุณาแนบสลิปโอนเงิน');
+          toast.error('กรุณาแนบสลิปโอนเงิน');
           setIsSubmitting(false);
           return;
         }
@@ -522,7 +532,7 @@ export default function CheckoutPage() {
 
     } catch (error: any) {
       console.error('Error placing order:', error);
-      alert('เกิดข้อผิดพลาดในการสั่งซื้อ: ' + error.message);
+      toast.error('เกิดข้อผิดพลาดในการสั่งซื้อ: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }

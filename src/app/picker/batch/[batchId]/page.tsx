@@ -5,6 +5,8 @@ import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Check, CheckSquare, Package, ShoppingBag, ListTodo, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 // --- Types ---
 type Product = { id: string; name: string; image_url: string; product_units?: { name: string } | any };
@@ -38,6 +40,7 @@ export default function PickerBatchDetailPage() {
     // Checklist States
     const [pickedProducts, setPickedProducts] = useState<Record<string, boolean>>({}); // key: productId
     const [packedOrderItems, setPackedOrderItems] = useState<Record<string, boolean>>({}); // key: orderItemId
+    const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -77,9 +80,9 @@ export default function PickerBatchDetailPage() {
 
             if (error) throw error;
             setBatch(data as unknown as DeliveryBatch);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching batch detail:', error);
-            alert('ไม่สามารถดึงข้อมูลรอบจัดส่งได้');
+            toast.error('ไม่สามารถดึงข้อมูลรอบจัดส่งได้: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -146,12 +149,16 @@ export default function PickerBatchDetailPage() {
     }, [batch, packedOrderItems]);
 
     // ยืนยันการจัดของเสร็จสิ้น (Server Action)
-    const handleCompleteBatch = async () => {
+    const handleCompleteBatchClick = () => {
         if (!isAllPacked) {
-            alert('กรุณาแพ็กสินค้าและติ๊กถูกให้ครบทุกออเดอร์');
+            toast.error('กรุณาแพ็กสินค้าและติ๊กถูกให้ครบทุกออเดอร์');
             return;
         }
-        if (!confirm('ยืนยันว่าแพ็กสินค้าใส่กล่องครบทุกออเดอร์แล้ว?')) return;
+        setConfirmModalOpen(true);
+    };
+
+    const executeCompleteBatch = async () => {
+        setConfirmModalOpen(false);
         setIsSubmitting(true);
 
         try {
@@ -164,11 +171,11 @@ export default function PickerBatchDetailPage() {
                 await supabase.from('orders').update({ status: 'ready_for_pickup' }).in('id', orderIds);
             }
 
-            alert('จัดเตรียมสินค้าเรียบร้อย! ส่งต่อให้ไรเดอร์ได้เลย');
+            toast.success('จัดเตรียมสินค้าเรียบร้อย! ส่งต่อให้ไรเดอร์ได้เลย');
             router.push('/picker/dashboard');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error completing batch:', error);
-            alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+            toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
             setIsSubmitting(false);
         }
     };
@@ -299,7 +306,7 @@ export default function PickerBatchDetailPage() {
             {activeTab === 'pack' && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:static md:bg-transparent md:border-none md:p-0 md:shadow-none md:max-w-3xl md:mx-auto md:mt-8 z-30 pb-safe">
                     <button 
-                        onClick={handleCompleteBatch}
+                        onClick={handleCompleteBatchClick}
                         disabled={!isAllPacked || isSubmitting}
                         className={`w-full py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isAllPacked ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-600/30' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                     >
@@ -307,6 +314,15 @@ export default function PickerBatchDetailPage() {
                     </button>
                 </div>
             )}
+
+            {/* Modal ยืนยันการแพ็กสินค้า */}
+            <ConfirmModal
+                isOpen={confirmModalOpen}
+                title="ยืนยันการจัดเตรียมสินค้า"
+                message="ยืนยันว่าแพ็กสินค้าใส่กล่องครบทุกออเดอร์แล้วใช่หรือไม่?"
+                onConfirm={executeCompleteBatch}
+                onCancel={() => setConfirmModalOpen(false)}
+            />
         </div>
     );
 }

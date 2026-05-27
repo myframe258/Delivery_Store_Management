@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { UploadCloud, CheckCircle, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface CheckoutPaymentUIProps {
   branchId: number;
@@ -36,7 +37,7 @@ export default function CheckoutPaymentUI({ branchId, totalPrice, onOrderComplet
       // กระบวนการอัปโหลดสลิป (ถ้าเลือก PromptPay)
       if (paymentMethod === "promptpay") {
         if (!slipFile) {
-          alert("กรุณาแนบสลิปโอนเงินก่อนยืนยันคำสั่งซื้อ");
+          toast.error("กรุณาแนบสลิปโอนเงินก่อนยืนยันคำสั่งซื้อ");
           setIsSubmitting(false);
           return;
         }
@@ -84,7 +85,7 @@ export default function CheckoutPaymentUI({ branchId, totalPrice, onOrderComplet
       onOrderComplete(orderData.id);
     } catch (error) {
       console.error("Order submission failed:", error);
-      alert("เกิดข้อผิดพลาดในการสั่งซื้อ กรุณาลองใหม่อีกครั้ง");
+      toast.error("เกิดข้อผิดพลาดในการสั่งซื้อ กรุณาลองใหม่อีกครั้ง");
     } finally {
       setIsSubmitting(false);
     }

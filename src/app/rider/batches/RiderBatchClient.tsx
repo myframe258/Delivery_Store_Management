@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { MapPin, Navigation, CheckCircle, Package, RefreshCw, Phone, List, ChevronDown, ChevronUp } from 'lucide-react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import toast from 'react-hot-toast';
 
 const RiderMap = dynamic(() => import('@/components/maps/RiderMap'), {
   ssr: false,
@@ -18,6 +20,7 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
   const [activeBatchId, setActiveBatchId] = useState<string | null>(initialBatches[0]?.id || null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<string[]>([]);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; batchItemId: string; orderId: string }>({ isOpen: false, batchItemId: '', orderId: '' });
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,8 +49,13 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
   };
 
   // ฟังก์ชันอัปเดตสถานะการจัดส่ง
-  const handleMarkDelivered = async (batchItemId: string, orderId: string) => {
-    if (!confirm('ยืนยันการส่งมอบสินค้าสำเร็จ?')) return;
+  const handleMarkDeliveredClick = (batchItemId: string, orderId: string) => {
+    setConfirmModal({ isOpen: true, batchItemId, orderId });
+  };
+
+  const executeMarkDelivered = async () => {
+    const { batchItemId, orderId } = confirmModal;
+    setConfirmModal({ isOpen: false, batchItemId: '', orderId: '' });
     setIsUpdating(true);
 
     try {
@@ -103,9 +111,9 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
         return updatedBatches;
       });
 
-      alert(alertMessage);
+      toast.success(alertMessage);
     } catch (error: any) {
-      alert('เกิดข้อผิดพลาด: ' + error.message);
+      toast.error('เกิดข้อผิดพลาด: ' + error.message);
     } finally {
       setIsUpdating(false);
     }
@@ -277,7 +285,7 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
                     <Navigation className="w-4 h-4" /> นำทาง
                   </button>
                   
-                  <button disabled={isDelivered || isUpdating} onClick={() => item.orders?.id && handleMarkDelivered(item.id, item.orders.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition ${isDelivered ? 'bg-green-500 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
+                  <button disabled={isDelivered || isUpdating} onClick={() => item.orders?.id && handleMarkDeliveredClick(item.id, item.orders.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition ${isDelivered ? 'bg-green-500 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
                     {isDelivered ? <><CheckCircle className="w-4 h-4" /> ส่งสำเร็จ</> : 'ยืนยันการส่ง'}
                   </button>
                 </div>
@@ -286,6 +294,15 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
           })}
         </div>
       </div>
+
+      {/* Modal ยืนยันการส่งสำเร็จ */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title="ยืนยันการส่งมอบ"
+        message="คุณได้ส่งมอบสินค้าและเก็บเงิน (ถ้ามี) เรียบร้อยแล้วใช่หรือไม่?"
+        onConfirm={executeMarkDelivered}
+        onCancel={() => setConfirmModal({ isOpen: false, batchItemId: '', orderId: '' })}
+      />
     </div>
   );
 }

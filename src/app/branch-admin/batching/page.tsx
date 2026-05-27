@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import dynamic from 'next/dynamic';
 import AdminSlipVerification from '@/components/admin/AdminSlipVerification';
+import toast from 'react-hot-toast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 // โหลด Leaflet แบบ Dynamic เพื่อป้องกันปัญหา window is not defined (SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
@@ -29,6 +31,7 @@ export default function BatchingPage() {
   const [activeBatches, setActiveBatches] = useState<any[]>([]);
   const [groupedSlots, setGroupedSlots] = useState<any>({});
   const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
+  const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; batchId: string; orderIds: string[] }>({ isOpen: false, batchId: '', orderIds: [] });
   
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const todayObj = new Date();
@@ -162,7 +165,7 @@ export default function BatchingPage() {
 
   const handleOptimizeAndCreateBatch = async () => {
     if (selectedOrderIds.length === 0) {
-      alert('กรุณาเลือกออเดอร์อย่างน้อย 1 รายการเพื่อสร้างรอบส่ง');
+      toast.error('กรุณาเลือกออเดอร์อย่างน้อย 1 รายการ เพื่อดำเนินการสร้างรอบจัดส่ง');
       return;
     }
 
@@ -218,9 +221,9 @@ export default function BatchingPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert('สร้างรอบส่งสำเร็จ แต่ไม่สามารถคำนวณเส้นทางอัตโนมัติได้: ' + (data.error || ''));
+        toast.success('สร้างรอบจัดส่งสำเร็จแล้ว\nแต่ระบบไม่สามารถจัดเรียงเส้นทางอัตโนมัติได้เนื่องจาก: ' + (data.error || 'ไม่ทราบสาเหตุ'), { duration: 5000 });
       } else {
-        alert('จัดรอบการส่งเรียบร้อยแล้ว เส้นทางถูกปรับให้สั้นที่สุด!');
+        toast.success('สร้างรอบจัดส่งสำเร็จ!\nระบบได้จัดเรียงเส้นทางที่เหมาะสมที่สุดให้เรียบร้อยแล้ว');
       }
 
       setSelectedOrderIds([]);
@@ -228,7 +231,7 @@ export default function BatchingPage() {
       fetchData(); // รีเฟรชข้อมูลบนหน้าจอใหม่
     } catch (error: any) {
       console.error('Batching Error:', error);
-      alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      toast.error(`ไม่สามารถสร้างรอบจัดส่งได้: ${error.message}`);
     } finally {
       setOptimizing(false);
     }
@@ -244,16 +247,21 @@ export default function BatchingPage() {
         .eq('id', batchId);
       
       if (error) throw error;
-      alert('อัปเดตคนขับสำเร็จ');
+      toast.success('มอบหมายพนักงานขับรถเรียบร้อยแล้ว');
       fetchData();
     } catch (err: any) {
-      alert('เกิดข้อผิดพลาด: ' + err.message);
+      toast.error('ไม่สามารถมอบหมายพนักงานขับรถได้: ' + err.message);
     }
   };
 
   // ฟังก์ชันยกเลิกรอบจัดส่ง (คืนสถานะออเดอร์ทั้งหมด)
-  const handleCancelBatch = async (batchId: string, orderIds: string[]) => {
-    if (!confirm('ยืนยันการยกเลิกรอบจัดส่งนี้?\nออเดอร์ทั้งหมดจะถูกคืนกลับไปสถานะ "รอจัดรอบ"')) return;
+  const handleCancelBatchClick = (batchId: string, orderIds: string[]) => {
+    setCancelModal({ isOpen: true, batchId, orderIds });
+  };
+
+  const executeCancelBatch = async () => {
+    const { batchId, orderIds } = cancelModal;
+    setCancelModal({ isOpen: false, batchId: '', orderIds: [] });
     setLoading(true);
     try {
       // 1. คืนสถานะออเดอร์
@@ -268,10 +276,10 @@ export default function BatchingPage() {
       const { error: batchErr } = await supabase.from('delivery_batches').delete().eq('id', batchId);
       if (batchErr) throw batchErr;
 
-      alert('ยกเลิกรอบจัดส่งสำเร็จ ออเดอร์ถูกคืนสถานะแล้ว');
+      toast.success('ยกเลิกรอบจัดส่งและคืนสถานะออเดอร์เรียบร้อยแล้ว');
       fetchData();
     } catch (err: any) {
-      alert('เกิดข้อผิดพลาดในการยกเลิกรอบส่ง: ' + err.message);
+      toast.error('ไม่สามารถยกเลิกรอบจัดส่งได้: ' + err.message);
       setLoading(false);
     }
   };
@@ -509,7 +517,7 @@ export default function BatchingPage() {
                       </div>
 
                       <button
-                        onClick={() => handleCancelBatch(batch.id, batch.batch_items?.map((i: any) => i.order_id) || [])}
+                        onClick={() => handleCancelBatchClick(batch.id, batch.batch_items?.map((i: any) => i.order_id) || [])}
                         disabled={batch.batch_status === 'in_progress'}
                         className="mt-0 sm:mt-5 px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -553,6 +561,16 @@ export default function BatchingPage() {
           </div>
         </div>
       )}
+
+      {/* Modal ยืนยันการยกเลิกรอบจัดส่ง */}
+      <ConfirmModal
+        isOpen={cancelModal.isOpen}
+        title="ยืนยันการยกเลิกรอบจัดส่ง"
+        message="คุณต้องการยกเลิกรอบจัดส่งนี้ใช่หรือไม่?&#10;&#10;*ออเดอร์ทั้งหมดในรอบนี้จะถูกคืนสถานะกลับไปเป็น &quot;รอจัดรอบ&quot; ตามเดิม"
+        onConfirm={executeCancelBatch}
+        onCancel={() => setCancelModal({ isOpen: false, batchId: '', orderIds: [] })}
+        isDestructive={true}
+      />
     </div>
   );
 }

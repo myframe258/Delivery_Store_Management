@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { MapPin, Navigation, CheckCircle, Package } from 'lucide-react';
+import { MapPin, Navigation, CheckCircle, Package, RefreshCw, Phone, List, ChevronDown, ChevronUp } from 'lucide-react';
 
 const RiderMap = dynamic(() => import('@/components/maps/RiderMap'), {
   ssr: false,
@@ -11,9 +12,12 @@ const RiderMap = dynamic(() => import('@/components/maps/RiderMap'), {
 });
 
 export default function RiderBatchClient({ initialBatches }: { initialBatches: any[] }) {
+  const router = useRouter();
+  const [isRefreshing, startTransition] = useTransition();
   const [batches, setBatches] = useState(initialBatches);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(initialBatches[0]?.id || null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [expandedOrders, setExpandedOrders] = useState<string[]>([]);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,6 +37,13 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
   }, [initialBatches]);
 
   const activeBatch = batches.find((b) => b.id === activeBatchId);
+
+  // ฟังก์ชันโหลดข้อมูลงานใหม่
+  const handleRefresh = () => {
+    startTransition(() => {
+      router.refresh();
+    });
+  };
 
   // ฟังก์ชันอัปเดตสถานะการจัดส่ง
   const handleMarkDelivered = async (batchItemId: string, orderId: string) => {
@@ -106,11 +117,25 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
     window.open(url, '_blank');
   };
 
+  // ฟังก์ชันเปิด/ปิดดูรายการสินค้า
+  const toggleOrderDetails = (orderId: string) => {
+    if (!orderId) return;
+    setExpandedOrders(prev => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
+  };
+
   if (batches.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] text-gray-500 px-4 text-center">
         <Package className="w-16 h-16 mb-4 text-gray-300" />
-        <p className="text-lg font-medium">คุณไม่มีรอบจัดส่งที่ได้รับมอบหมายในขณะนี้</p>
+        <p className="text-lg font-medium mb-6">คุณไม่มีรอบจัดส่งที่ได้รับมอบหมายในขณะนี้</p>
+        <button 
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'กำลังโหลดข้อมูล...' : 'รีเฟรชอัปเดตงานใหม่'}
+        </button>
       </div>
     );
   }
@@ -137,26 +162,37 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
       <div className="flex-1 md:w-1/2 lg:w-2/5 bg-gray-50 flex flex-col overflow-hidden border-t md:border-t-0 md:border-l border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:shadow-none z-10">
         
         {/* ตัวเลือกรอบบิล */}
-        <div className="p-4 bg-white border-b border-gray-200">
-          <label htmlFor="batch-select" className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">เลือกรอบการจัดส่ง</label>
-          <select
-            id="batch-select"
-            value={activeBatchId || ''} 
-            onChange={(e) => setActiveBatchId(e.target.value)}
-            className="w-full bg-slate-50 border border-gray-200 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
+        <div className="p-4 bg-white border-b border-gray-200 flex gap-3 items-end shadow-sm z-10">
+          <div className="flex-1">
+            <label htmlFor="batch-select" className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">เลือกรอบการจัดส่ง</label>
+            <select
+              id="batch-select"
+              value={activeBatchId || ''} 
+              onChange={(e) => setActiveBatchId(e.target.value)}
+              className="w-full bg-slate-50 border border-gray-200 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none cursor-pointer"
+            >
+              {batches.map((batch, index) => (
+                <option key={batch.id} value={batch.id}>
+                  รอบที่ {index + 1} ({batch.batch_items.length} จุดส่ง)
+                </option>
+              ))}
+            </select>
+          </div>
+          <button 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="รีเฟรชข้อมูล"
+            className="p-2.5 h-[42px] border border-gray-200 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition shadow-sm flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {batches.map((batch, index) => (
-              <option key={batch.id} value={batch.id}>
-                รอบที่ {index + 1} ({batch.batch_items.length} จุดส่ง)
-              </option>
-            ))}
-          </select>
+            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
+          </button>
         </div>
 
         {/* รายการออเดอร์ในรอบบิล (เรียงตามลำดับ sequence_no) */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {activeBatch?.batch_items.sort((a: any, b: any) => a.sequence_no - b.sequence_no).map((item: any) => {
             const isDelivered = item.delivery_status === 'delivered';
+            const isExpanded = expandedOrders.includes(item.orders?.id);
             
             return (
               <div key={item.id} className={`p-4 rounded-xl border ${isDelivered ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 shadow-sm'}`}>
@@ -165,12 +201,50 @@ export default function RiderBatchClient({ initialBatches }: { initialBatches: a
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${isDelivered ? 'bg-green-500' : 'bg-blue-600'}`}>
                       {item.sequence_no}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800 text-sm line-clamp-1">{item.orders?.customer_info?.name || 'ไม่ระบุชื่อ'}</h3>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-bold text-slate-800 text-sm line-clamp-1 pr-2">{item.orders?.customer_info?.name || 'ไม่ระบุชื่อ'}</h3>
+                        {item.orders?.customer_info?.phone && (
+                          <a href={`tel:${item.orders.customer_info.phone}`} className="text-green-600 p-1.5 hover:bg-green-100 bg-green-50 rounded-full transition-colors shrink-0" title="โทรหาลูกค้า">
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.orders?.customer_info?.address || 'ไม่ระบุที่อยู่'}</p>
                       <p className="text-xs font-medium text-blue-600 mt-1">เก็บเงิน: ฿{item.orders?.total_price?.toLocaleString() || 0}</p>
                     </div>
                   </div>
+                </div>
+
+                {/* ส่วนแสดงรายละเอียดสินค้า (Toggle) */}
+                <div className="mt-3">
+                  <button 
+                    onClick={() => toggleOrderDetails(item.orders?.id)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-blue-600 transition-colors py-1"
+                  >
+                    <List className="w-3.5 h-3.5" /> ดูรายการสินค้า {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                  
+                  {isExpanded && item.orders?.order_items && (
+                    <div className="mt-2 pt-2 border-t border-dashed border-gray-200/60 bg-slate-50/50 rounded-lg p-2.5">
+                      <ul className="space-y-1.5">
+                        {item.orders.order_items.map((orderItem: any, idx: number) => {
+                          // จัดการตัวเลขให้สวยงาม (ตัดทศนิยมถ้าเป็นจำนวนเต็ม)
+                          const qty = Number(orderItem.quantity);
+                          const displayQty = Number.isInteger(qty) ? qty : qty.toFixed(2).replace(/\.?0+$/, '');
+                          const unit = Array.isArray(orderItem.products?.product_units) ? orderItem.products.product_units[0] : orderItem.products?.product_units;
+                          const unitName = unit?.name || '';
+                          
+                          return (
+                            <li key={idx} className="text-xs text-slate-700 flex justify-between items-start gap-2">
+                              <span className="line-clamp-2">- {orderItem.products?.name || 'ไม่ระบุชื่อสินค้า'}</span>
+                              <span className="font-semibold shrink-0 text-blue-700">x{displayQty} {unitName}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 flex gap-2">

@@ -42,7 +42,14 @@ export default async function RiderBatchesPage() {
           lng,
           total_price,
           customer_info,
-          status
+          status,
+          order_items (
+            quantity,
+            products (
+              name,
+              product_units (name)
+            )
+          )
         )
       )
     `)
@@ -61,7 +68,6 @@ export default async function RiderBatchesPage() {
     <div className="bg-gray-50 h-full">
       {/* ส่งต่อข้อมูลให้ Client Component จัดการ UI Interactive */}
       <RiderBatchClient initialBatches={batches || []} />
-      {(!batches || batches.length === 0) && <div className="p-4 text-xs text-gray-400 text-center">Debug: UserID={user.id} | Batches=0 (อาจติด RLS หรือ Cache)</div>}
     </div>
   );
 }

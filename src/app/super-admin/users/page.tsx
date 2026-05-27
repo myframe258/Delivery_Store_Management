@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Users, Edit2, Shield, Store, X } from 'lucide-react';
+import { Users, Edit2, Shield, Store, X, UserPlus } from 'lucide-react';
 
 type Branch = {
   id: string;
@@ -29,12 +29,14 @@ export default function SuperAdminUsersPage() {
   const [filterRole, setFilterRole] = useState<'employee' | 'customer' | 'all'>('employee');
 
   // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Form State
-  const [formData, setFormData] = useState<{ role: string; branch_id: string }>({
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
     role: 'customer',
     branch_id: '',
   });
@@ -78,23 +80,35 @@ export default function SuperAdminUsersPage() {
     }
   };
 
-  const openModal = (user: UserRecord) => {
+  const openEditModal = (user: UserRecord) => {
     setEditingUser(user);
     setFormData({
+      email: user.email || '',
+      password: '',
       role: user.role || 'customer',
       branch_id: user.branch_id ? String(user.branch_id) : '',
     });
-    setIsModalOpen(true);
+    setModalMode('edit');
+  };
+
+  const openCreateModal = () => {
+    setEditingUser(null);
+    setFormData({
+      email: '',
+      password: '',
+      role: 'customer',
+      branch_id: '',
+    });
+    setModalMode('create');
   };
 
   const closeModal = () => {
-    setIsModalOpen(false);
+    setModalMode(null);
     setEditingUser(null);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
     
     setIsSaving(true);
 
@@ -109,17 +123,36 @@ export default function SuperAdminUsersPage() {
         return;
       }
 
-      const { error } = await supabase
-        .from('users')
-        .update({
-          role: formData.role,
-          branch_id: finalBranchId,
-        })
-        .eq('id', editingUser.id);
+      if (modalMode === 'create') {
+        // เรียกใช้งาน API สร้างผู้ใช้ใหม่ (Bypass RLS ด้วย Service Role)
+        const res = await fetch('/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            role: formData.role,
+            branch_id: finalBranchId ? parseInt(finalBranchId, 10) : null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'ไม่สามารถสร้างผู้ใช้งานได้');
+        alert('สร้างผู้ใช้งานใหม่สำเร็จ');
 
-      if (error) throw error;
+      } else if (modalMode === 'edit' && editingUser) {
+        // อัปเดตข้อมูลผู้ใช้งานเดิม
+        const { error } = await supabase
+          .from('users')
+          .update({
+            role: formData.role,
+            branch_id: finalBranchId ? parseInt(finalBranchId, 10) : null,
+          })
+          .eq('id', editingUser.id);
       
-      alert('อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ');
+        if (error) throw error;
+        alert('อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ');
+      }
+
       closeModal();
       fetchData(); // โหลดข้อมูลใหม่
     } catch (error: any) {
@@ -155,25 +188,35 @@ export default function SuperAdminUsersPage() {
           <p className="text-gray-500 mt-1">กำหนดสิทธิ์ (Role) และระบุสาขาต้นสังกัดให้พนักงาน (Super Admin)</p>
         </div>
         
-        {/* ตัวกรอง (Filter) สำหรับกรองดูเฉพาะพนักงาน หรือลูกค้า */}
-        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 w-full md:w-auto">
-          <button 
-            onClick={() => setFilterRole('employee')}
-            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterRole === 'employee' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          {/* ตัวกรอง (Filter) สำหรับกรองดูเฉพาะพนักงาน หรือลูกค้า */}
+          <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 w-full md:w-auto">
+            <button 
+              onClick={() => setFilterRole('employee')}
+              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterRole === 'employee' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              พนักงาน (Staff)
+            </button>
+            <button 
+              onClick={() => setFilterRole('customer')}
+              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterRole === 'customer' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              ลูกค้า
+            </button>
+            <button 
+              onClick={() => setFilterRole('all')}
+              className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterRole === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              ทั้งหมด
+            </button>
+          </div>
+
+          <button
+            onClick={openCreateModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium flex justify-center items-center gap-2 transition-all shadow-sm active:scale-95 whitespace-nowrap"
           >
-            พนักงาน (Staff)
-          </button>
-          <button 
-            onClick={() => setFilterRole('customer')}
-            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterRole === 'customer' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            ลูกค้า
-          </button>
-          <button 
-            onClick={() => setFilterRole('all')}
-            className={`flex-1 md:flex-none px-4 py-2 rounded-md text-sm font-medium transition-colors ${filterRole === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            ทั้งหมด
+            <UserPlus className="w-5 h-5" />
+            เพิ่มผู้ใช้ใหม่
           </button>
         </div>
       </div>
@@ -218,7 +261,7 @@ export default function SuperAdminUsersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <button onClick={() => openModal(user)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสิทธิ์">
+                      <button onClick={() => openEditModal(user)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสิทธิ์">
                         <Edit2 className="w-5 h-5 mx-auto" />
                       </button>
                     </td>
@@ -230,14 +273,16 @@ export default function SuperAdminUsersPage() {
         </div>
       </div>
 
-      {/* Edit Role Modal */}
-      {isModalOpen && editingUser && (
+      {/* Create / Edit Role Modal */}
+      {modalMode !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><Shield className="w-5 h-5 text-blue-600" /> แก้ไขสิทธิ์ผู้ใช้งาน</h2>
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                {modalMode === 'create' ? <><UserPlus className="w-5 h-5 text-blue-600" /> เพิ่มผู้ใช้งานใหม่</> : <><Shield className="w-5 h-5 text-blue-600" /> แก้ไขสิทธิ์ผู้ใช้งาน</>}
+              </h2>
               <button
-                onClick={closeModal} 
+                onClick={closeModal}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-200"
                 title="ปิดหน้าต่าง"
               >
@@ -246,6 +291,25 @@ export default function SuperAdminUsersPage() {
             </div>
             
             <form onSubmit={handleSave} className="p-6 flex-grow flex flex-col gap-5">
+              
+              {modalMode === 'create' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">อีเมลผู้ใช้งาน <span className="text-red-500">*</span></label>
+                    <input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="email@example.com" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน <span className="text-red-500">*</span></label>
+                    <input required type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="รหัสผ่านขั้นต่ำ 6 ตัวอักษร" minLength={6} />
+                  </div>
+                </>
+              )}
+              {modalMode === 'edit' && editingUser?.email && (
+                <div className="bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-600">
+                  กำลังแก้ไขสิทธิ์ของ: <span className="font-bold text-gray-800">{editingUser.email}</span>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ระดับสิทธิ์ (Role)</label>
                 <select 

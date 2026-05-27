@@ -11,6 +11,7 @@ type Branch = {
   phone: string;
   lat: number;
   lng: number;
+  service_radius?: number;
 };
 
 export default function SuperAdminBranchesPage() {
@@ -34,6 +35,7 @@ export default function SuperAdminBranchesPage() {
     phone: '',
     lat: '',
     lng: '',
+    service_radius: '15', // ค่าเริ่มต้น 15 กม.
   });
 
   useEffect(() => {
@@ -68,10 +70,11 @@ export default function SuperAdminBranchesPage() {
         phone: branch.phone || '',
         lat: branch.lat ? String(branch.lat) : '',
         lng: branch.lng ? String(branch.lng) : '',
+        service_radius: branch.service_radius ? String(branch.service_radius) : '15',
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', address: '', phone: '', lat: '', lng: '' });
+      setFormData({ name: '', address: '', phone: '', lat: '', lng: '', service_radius: '15' });
     }
     setIsModalOpen(true);
   };
@@ -92,6 +95,7 @@ export default function SuperAdminBranchesPage() {
         phone: formData.phone,
         lat: parseFloat(formData.lat),
         lng: parseFloat(formData.lng),
+        service_radius: parseInt(formData.service_radius, 10) || 15,
       };
 
       if (editingId) {
@@ -199,8 +203,8 @@ export default function SuperAdminBranchesPage() {
               </div>
               
               <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between text-xs text-gray-500">
-                <span>Lat: {branch.lat ? Number(branch.lat).toFixed(4) : '-'}</span>
-                <span>Lng: {branch.lng ? Number(branch.lng).toFixed(4) : '-'}</span>
+                <span>Lat: {branch.lat ? Number(branch.lat).toFixed(4) : '-'} | Lng: {branch.lng ? Number(branch.lng).toFixed(4) : '-'}</span>
+                <span className="font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">รัศมี: {branch.service_radius || 15} กม.</span>
               </div>
             </div>
           ))}
@@ -224,6 +228,11 @@ export default function SuperAdminBranchesPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อสาขา <span className="text-red-500">*</span></label>
                 <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="เช่น สาขาเชียงใหม่" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">รัศมีการให้บริการ (กิโลเมตร) <span className="text-red-500">*</span></label>
+                <input required type="number" min="1" value={formData.service_radius} onChange={(e) => setFormData({...formData, service_radius: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="15" />
               </div>
               
               <div>

@@ -1,6 +1,6 @@
-# Product Requirements Document (PRD) - Version 5
+# Product Requirements Document (PRD) - Version 6
 **Project Name:** Multi-Branch Store & Batch Delivery Management System  
-**Document Status:** Latest Production Draft (Updated with Audit Report)
+**Document Status:** Production Ready (Core Flows, RLS Security, and Tracking Completed)
 
 ---
 
@@ -44,7 +44,7 @@
 - **[Done 100%] Branch Locator & Catalog:** ค้นหาสาขาผ่าน Leaflet.js และดึงรายการสินค้าพร้อมสเตทการแยกสต็อกรายสาขาได้อย่างถูกต้อง
 - **[Done 100%] Address Pinning:** หน้า Checkout ลูกค้าสามารถเลื่อนหมุด (Draggable Marker) เพื่อบันทึกพิกัดจัดส่งได้อย่างแม่นยำ
 - **[Done 100%] Shopping Cart:** ระบบตะกร้าสินค้าจัดการผ่าน Zustand เก็บ State ได้แม้อยู่ในสถานะ Guest
-- **[Pending] Order Tracking:** หน้าจอติดตามสถานะออเดอร์สำหรับลูกค้า (Pending -> Batched -> Delivered)
+- **[Done 100%] Order Tracking:** หน้าจอติดตามสถานะออเดอร์สำหรับลูกค้า (ประวัติการสั่งซื้อ, สถานะ Pending -> Batched -> Delivered)
 
 ### 4.2 สำหรับ Admin (Management Dashboard)
 - **[Done 100%] Responsive Navbar:** แท็บเมนูสลับอัตโนมัติตาม Role ของผู้ใช้งาน รองรับ Mobile Layout อย่างสมบูรณ์ (SafeArea `pt-14`, `pb-16` ป้องกันการทับซ้อนของ UI)
@@ -59,21 +59,9 @@
 - **[Done 100%] Rider App:** หน้าจอ PWA ออกแบบเพื่อคนขับโดยเฉพาะ แสดงคิวส่งตามลำดับ (`sequence_no`)
 - **[Done 100%] Real-time Delivery & Navigation:** คนขับสามารถกดปุ่มเปิด Google Maps นำทาง และอัปเดตสถานะการจัดส่ง "สำเร็จ" ได้แบบรายจุดหมาย
 
----
 
-## 5. แผนการพัฒนาใน Sprint ถัดไป (Next Sprints & Roadmap)
 
-**ลำดับที่ 1 (High Priority): Super Admin Master Data**
-- เพิ่มหน้าต่างสรุปยอดขายและการจัดส่ง (Analytics) สำหรับ Branch Admin และ Super Admin
-
-**Technical Debt & Security Clean-up (ด่วนมาก):**
-- **🚨 Row Level Security (RLS):** ต้องรีบเพิ่ม RLS Policy ใน Supabase ทันที เพื่อป้องกัน Hacker ยิง API ฝั่ง Client-side (เช่น `.insert()`, `.update()` ในหน้า Batching/Inventory) ข้ามสาขาหรือเปลี่ยนแปลงข้อมูลสำคัญ
-- **Type Safety:** ยกเลิกการใช้ `any` ใน TypeScript (เช่น `[branchId]/page.tsx`, `RiderBatchClient.tsx`) โดยใช้คำสั่ง Generate Types จาก Supabase Database มาครอบตัวแปรทั้งหมดเพื่อรับประกัน Type Safety
-- **Role Syncing Optimization:** ตรวจสอบ PostgreSQL Trigger ที่ทำหน้าที่ Sync `role` ลง `raw_app_meta_data` ให้สมบูรณ์ 100% เพื่อที่จะได้ลบการยิง Query ดึง Role ซ้ำซ้อนใน `Navbar.tsx` ช่วยลดภาระฐานข้อมูล
-
----
-
-## 6. เครื่องมือทางเทคนิค (Technical Stack)
+## 5. เครื่องมือทางเทคนิค (Technical Stack)
 - **Framework:** Next.js 16 (App Router)
 - **UI & Styling:** Tailwind CSS v4, Lucide React, PWA SafeArea Config
 - **Database & Auth:** Supabase (PostgreSQL) + `@supabase/ssr`

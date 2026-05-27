@@ -17,6 +17,7 @@ type UserRecord = {
   branches: { name: string } | null;
 };
 
+
 export default function SuperAdminUsersPage() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -14,6 +14,7 @@ type Branch = {
   service_radius?: number;
 };
 
+
 export default function SuperAdminBranchesPage() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

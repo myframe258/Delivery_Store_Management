@@ -7,9 +7,16 @@ export async function POST(request: Request) {
     // 1. ตรวจสอบสิทธิ์ว่าผู้เรียก API นี้เป็น 'super_admin' หรือไม่
     const supabase = await createClient();
     
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
     
-    if (!session || session.user.user_metadata?.role !== 'super_admin') {
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: กรุณาเข้าสู่ระบบก่อนทำรายการ' }, { status: 401 });
+    }
+
+    // ตรวจสอบ Role จากฐานข้อมูลโดยตรงเพื่อให้ได้ค่าที่อัปเดตล่าสุดเสมอ ป้องกันปัญหา JWT ค้าง
+    const { data: currentUserProfile } = await supabase.from('users').select('role').eq('id', user.id).single();
+
+    if (currentUserProfile?.role !== 'super_admin') {
       return NextResponse.json({ error: 'Unauthorized: สิทธิ์การเข้าถึงถูกปฏิเสธ (ต้องเป็น Super Admin เท่านั้น)' }, { status: 403 });
     }
 

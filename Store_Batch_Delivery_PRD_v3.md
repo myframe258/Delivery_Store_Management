@@ -1,6 +1,6 @@
-# Product Requirements Document (PRD) - Version 6
+# Product Requirements Document (PRD) - Version 4 (MVP Ready Draft)
 **Project Name:** Multi-Branch Store & Batch Delivery Management System  
-**Document Status:** Production Ready (Core Flows, RLS Security, and Tracking Completed)
+**Document Status:** MVP Ready Draft
 
 ---
 
@@ -22,12 +22,12 @@
 ระบบได้รับการออกแบบให้มี User Journey ที่ไร้รอยต่อ และไม่ต้องคอยพิมพ์ URL สลับหน้าเอง:
 
 - **Public Access (โซนสาธารณะ):** 
-  ลูกค้าทั่วไป (Guest) สามารถเข้าชมหน้าแรก (`/` - ค้นหาสาขา) และหน้าร้านค้าของสาขานั้นๆ (`/[branchId]`) รวมถึงเพิ่มสินค้าลงตะกร้าได้ทันที **โดยไม่ต้องล็อกอิน**
+  ระบบรองรับ Public Access ให้ลูกค้าเข้าชมร้านและเลือกสินค้าลงตะกร้าได้โดยไม่ต้อง Login
 
 - **Auth Boundary (จุดบังคับล็อกอิน):** 
-  ระบบจะดักจับและบังคับ Login **เฉพาะเมื่อกด "ยืนยันการสั่งซื้อ" ในหน้า `/checkout` เท่านั้น** 
+  บังคับ Login เฉพาะตอนกด 'ยืนยันการสั่งซื้อ' ในหน้า `/checkout` เท่านั้น
   - ต้องมีการจดจำ State ของตะกร้าสินค้า (ผ่าน `cartStore`)
-  - **[Critical UX]** ระบบ `/login` ต้องดักจับและรองรับ Query Parameter `?returnTo=/checkout` เพื่อให้ลูกค้าถูกเด้งกลับมาจ่ายเงินต่อได้ทันทีหลังล็อกอินสำเร็จ ป้องกันไม่ให้โดน Redirect ไปหน้า Dashboard ทั่วไป (Conversion Drop)
+  - **[Critical UX]** ระบบ `/login` ต้องรองรับการ Redirect กลับมาทำรายการต่อ เพื่อให้ลูกค้ากลับมาจ่ายเงินต่อได้ทันทีหลังล็อกอินสำเร็จ ป้องกันไม่ให้โดน Redirect ไปหน้า Dashboard ทั่วไป (Conversion Drop)
 
 - **Role-Based Redirect (การแยกเส้นทางหลัง Login):**
   เมื่อเข้าสู่ระบบสำเร็จ ระบบจะตรวจสอบสิทธิ์ (`role`) และเปลี่ยนหน้าอัตโนมัติ:
@@ -41,27 +41,34 @@
 ## 4. คุณสมบัติหลักที่ต้องมี (Core Features & Status)
 
 ### 4.1 สำหรับลูกค้า (Storefront & Checkout)
-- **[Done 100%] Branch Locator & Catalog:** ค้นหาสาขาผ่าน Leaflet.js และดึงรายการสินค้าพร้อมสเตทการแยกสต็อกรายสาขาได้อย่างถูกต้อง
-- **[Done 100%] Address Pinning:** หน้า Checkout ลูกค้าสามารถเลื่อนหมุด (Draggable Marker) เพื่อบันทึกพิกัดจัดส่งได้อย่างแม่นยำ
-- **[Done 100%] Shopping Cart:** ระบบตะกร้าสินค้าจัดการผ่าน Zustand เก็บ State ได้แม้อยู่ในสถานะ Guest
-- **[Done 100%] Order Tracking:** หน้าจอติดตามสถานะออเดอร์สำหรับลูกค้า (ประวัติการสั่งซื้อ, สถานะ Pending -> Batched -> Delivered)
+- **[Done 100%] Customer Flow:** หน้าร้านค้าแยกสาขา, ระบบตะกร้าสินค้า (Zustand), และหน้า Checkout ปักหมุดที่อยู่ลงแผนที่ (Leaflet)
 
 ### 4.2 สำหรับ Admin (Management Dashboard)
-- **[Done 100%] Responsive Navbar:** แท็บเมนูสลับอัตโนมัติตาม Role ของผู้ใช้งาน รองรับ Mobile Layout อย่างสมบูรณ์ (SafeArea `pt-14`, `pb-16` ป้องกันการทับซ้อนของ UI)
-  *(หมายเหตุ: ต้องเพิ่มเมนู "จัดการสาขา" และ "จัดการผู้ใช้" สำหรับ Super Admin ลงใน Navbar เพื่อลด UX Gap สำหรับผู้ดูแลระบบ)*
-- **[Done 100%] Branch Admin Batching:** Interactive Map ที่ให้แอดมินลากหรือคลิกเลือกออเดอร์ที่ค้างส่งบนแผนที่ เพื่อสร้างเป็นรอบจัดส่ง (Batch) ได้ทันที
-- **[Done 100%] Route Optimization API:** ระบบคำนวณเส้นทางและจัดลำดับจุดส่งอัตโนมัติด้วย Google Maps Directions API (TSP)
-- **[Done 100%] Branch Inventory:** ระบบให้ผู้จัดการสาขาอัปเดตสต็อกและสถานะเปิด/ปิดการขายสินค้า
-- **[Done 100%] Super Admin Products:** หน้าจอจัดการฐานข้อมูลสินค้าส่วนกลาง, นำเข้า/ส่งออกด้วย Excel (Bulk Update), อัปโหลดรูปขึ้น Storage และระบบ Soft Delete (`is_active`)
-- **[Pending] Super Admin Master Data (Branch & User):** หน้าจอเพิ่ม/ลบสาขา และกำหนด Role ผู้ใช้งาน
+- **[Done 100%] Branch Admin Flow:** หน้าจัดรอบส่ง (Batching Dashboard) ที่ดึงออเดอร์มาสร้างรอบการจัดส่งผ่านแผนที่
 
 ### 4.3 สำหรับคนขับ (Rider Interface)
-- **[Done 100%] Rider App:** หน้าจอ PWA ออกแบบเพื่อคนขับโดยเฉพาะ แสดงคิวส่งตามลำดับ (`sequence_no`)
-- **[Done 100%] Real-time Delivery & Navigation:** คนขับสามารถกดปุ่มเปิด Google Maps นำทาง และอัปเดตสถานะการจัดส่ง "สำเร็จ" ได้แบบรายจุดหมาย
+- **[Done 100%] Rider Flow:** หน้าจอ Mobile-friendly สำหรับคนขับ, ดูคิวงาน (Sequence), ปุ่มกดนำทาง Google Maps, และอัปเดตสถานะการส่งสำเร็จ
 
 
 
-## 5. เครื่องมือทางเทคนิค (Technical Stack)
+## 5. แผนการพัฒนาใน Sprint ถัดไป (Next Sprints & Future Roadmap)
+หลังจากระบบ Core Flow ของ MVP เสร็จสมบูรณ์ แผนการพัฒนาถัดไปจะมุ่งเน้นไปที่การสร้างรายได้ (Business Value), ความปลอดภัย, และการขยายระบบ (Scalability)
+
+### Sprint N+1 (High Priority / Quick Wins)
+- **Payment Gateway Integration:** เชื่อมต่อระบบชำระเงิน (Omise/Stripe) รองรับ PromptPay QR และ Credit Card ลดการตรวจสลิปแบบ Manual
+- **Customer Notifications:** เชื่อมต่อ Line Messaging API / SMS ส่งแจ้งเตือนสถานะออเดอร์แบบ Real-time ให้ลูกค้า
+- **Super Admin Master Data & Security:** สร้างหน้าจัดการสาขา/ผู้ใช้งาน และบังคับใช้ Row Level Security (RLS) ล็อกสิทธิ์การเข้าถึงข้อมูลระดับสาขา
+
+### Sprint N+2 (Medium Priority / Scale-up)
+- **Proof of Delivery & Rider Payouts:** ให้คนขับอัปโหลดรูปถ่ายหลักฐานการจัดส่งลง Supabase Storage พร้อมระบบคำนวณค่ารอบจัดส่งอัตโนมัติ
+- **Centralized Analytics Dashboard:** แดชบอร์ดสรุปยอดขายแยกตามสาขาและสินค้าขายดี สำหรับผู้บริหาร
+- **Redis Caching:** แคชข้อมูลแคตตาล็อกสินค้าและ Geofencing ด้วย Vercel KV/Redis ลดภาระ Database Read
+
+### Future Roadmap (Long-term Vision)
+- **Auto-Replenishment & Transfer:** ระบบแนะนำการโยกย้ายสต็อกข้ามสาขา และแจ้งเตือนสั่งของจากคลังอัตโนมัติ
+- **AI-Powered Upselling & Forecasting:** ใช้ AI วิเคราะห์พฤติกรรมการซื้อเพื่อแนะนำสินค้าที่เกี่ยวข้อง และคาดการณ์จำนวนคนขับที่ต้องการในช่วง Peak Time
+
+## 6. เครื่องมือทางเทคนิค (Technical Stack)
 - **Framework:** Next.js 16 (App Router)
 - **UI & Styling:** Tailwind CSS v4, Lucide React, PWA SafeArea Config
 - **Database & Auth:** Supabase (PostgreSQL) + `@supabase/ssr`

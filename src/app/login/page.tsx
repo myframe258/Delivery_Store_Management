@@ -35,11 +35,12 @@ export default function LoginPage() {
     return () => subscription.unsubscribe();
   }, [router, supabase]);
 
-  // ฟังก์ชันสำหรับล็อกอินด้วย Custom Provider (LINE)
+  // ฟังก์ชันสำหรับล็อกอินด้วย Custom API (LINE)
   const signInWithLine = () => {
     const params = new URLSearchParams(window.location.search);
-    const returnTo = params.get('returnTo') || '/dashboard';
-    // นำทางผู้ใช้ไปยัง Route ของเราเพื่อขอ Authorization Code จาก LINE
+    const returnTo = params.get('returnTo') || '/';
+    
+    // กลับไปใช้ API Route เดิมที่ระบบมีอยู่แล้ว
     window.location.href = `/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`;
   };
 
@@ -56,9 +57,11 @@ export default function LoginPage() {
         <button
           onClick={signInWithLine}
           type="button"
-          className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#00C300] hover:bg-[#00B300] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C300] transition-colors"
+          className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-[#00C300] hover:bg-[#00B300] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00C300] transition-colors"
         >
-          {/* สามารถใส่ Icon ของ LINE ตรงนี้ได้ถ้ามี */}
+          <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+            <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 3.961 8.905 9.479 9.605.372.079.873.242.999.554.113.279.073.716.035 1.008-.005.042-.046.29-.22.846-.211.666 1.01.597 1.543.276.533-.321 2.871-1.696 3.964-2.913C21.439 17.067 24 13.918 24 10.304z"/>
+          </svg>
           เข้าสู่ระบบด้วย LINE
         </button>
 
@@ -84,7 +87,7 @@ export default function LoginPage() {
               }
             }
           }}
-          // ⚠️ เอา providers={['line']} ออก เพื่อให้เหลือแค่การใช้ Email อย่างเดียว
+          providers={[]} // กำหนดเป็น array ว่างเพื่อซ่อนปุ่ม Social Login (เช่น Github) ทั้งหมด
         />
       </div>
     </div>

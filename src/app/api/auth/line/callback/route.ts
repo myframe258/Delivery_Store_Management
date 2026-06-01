@@ -51,17 +51,18 @@ export async function GET(request: Request) {
     const supabase = await createClient();
 
     // 4. พยายามเข้าสู่ระบบ
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    let authUserId = signInData?.user?.id;
+
+    // เตรียม Admin Client เพื่อใช้สร้างบัญชีและจัดการฐานข้อมูล (ทะลุ RLS)
+    const supabaseAdmin = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     // 5. หากเข้าสู่ระบบไม่ได้ (แปลว่าผู้ใช้ใหม่) ให้สร้างบัญชี
     if (signInError && signInError.message.includes('Invalid login credentials')) {
-      // ใช้ Service Role ข้ามกฎความปลอดภัย เพื่อบังคับสร้างบัญชี
-      const supabaseAdmin = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-
-      const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+      const { data: createData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
@@ -75,7 +76,22 @@ export async function GET(request: Request) {
       if (createError) throw createError;
 
       // เข้าสู่ระบบใหม่อีกครั้ง
-      await supabase.auth.signInWithPassword({ email, password });
+      const { data: newSignInData } = await supabase.auth.signInWithPassword({ email, password });
+      authUserId = newSignInData?.user?.id;
+    }
+
+    // 6. อัปเดตข้อมูล line_user_id และ avatar_url ลงตาราง public.users เสมอ
+    if (authUserId) {
+      await supabaseAdmin.from('users').upsert({
+        id: authUserId,
+        email: email,
+        name: profile.displayName,
+        line_user_id: profile.userId,
+        avatar_url: profile.pictureUrl,
+        role: 'customer'
+      }, { 
+        onConflict: 'id' 
+      });
     }
 
     return NextResponse.redirect(`${safeOrigin}${returnTo}`);

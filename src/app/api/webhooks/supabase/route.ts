@@ -77,6 +77,8 @@ export async function POST(request: Request) {
         } else {
           console.log('[Webhook] ลูกค้ารายนี้ไม่ได้เชื่อมต่อบัญชี LINE ไว้ (ไม่มี line_user_id)');
         }
+      } else {
+        console.log(`[Webhook] ข้ามการแจ้งเตือน: สถานะออเดอร์ไม่ได้เปลี่ยนแปลง (ยังคงเป็น: ${status})`);
       }
     }
     return NextResponse.json({ success: true });

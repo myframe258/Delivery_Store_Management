@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
 import dynamic from 'next/dynamic';
+import { compressImage } from '@/lib/utils/imageCompression';
 import { createBrowserClient } from '@supabase/ssr';
-import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info, Home, Navigation, QrCode, Wallet, UploadCloud } from 'lucide-react';
+import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info, Home, Navigation, QrCode, Wallet, UploadCloud, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -69,6 +70,7 @@ export default function CheckoutPage() {
   // เพิ่ม State สำหรับระบบชำระเงิน
   const [paymentMethod, setPaymentMethod] = useState<'promptpay' | 'cod'>('promptpay');
   const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   // Address Book States
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -305,6 +307,25 @@ export default function CheckoutPage() {
       }
     } catch (err) {
       console.error('Reverse geocoding error:', err);
+    }
+  };
+
+  // ฟังก์ชันจัดการเมื่อผู้ใช้เลือกไฟล์สลิป (พร้อมบีบอัด)
+  const handleSlipChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        setIsCompressing(true);
+        // บีบอัดรูปสลิปให้ความกว้างไม่เกิน 800px เพื่อลดขนาดไฟล์
+        const compressedFile = await compressImage(file, 800, 0.8);
+        setSlipFile(compressedFile);
+      } catch (error) {
+        console.error("Slip compression error:", error);
+        toast.error("ไม่สามารถประมวลผลรูปภาพสลิปได้ กรุณาลองใหม่อีกครั้ง");
+        setSlipFile(null);
+      } finally {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -824,25 +845,33 @@ export default function CheckoutPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={`https://promptpay.io/0928727608/${getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)}.png`} alt="PromptPay QR Code" className="w-full h-full object-contain" />
                 </div>
-                <div className="text-left mt-4">
+                <div className="text-left mt-4 relative">
+                  {isCompressing && (
+                    <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center rounded-xl">
+                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                      <p className="mt-2 text-blue-800 font-medium">กำลังบีบอัดรูปภาพ...</p>
+                    </div>
+                  )}
                   <label className="block text-sm font-medium text-gray-700 mb-2">แนบสลิปโอนเงิน</label>
                   <input 
                     type="file" 
                     accept="image/*" 
                     title="เลือกไฟล์สลิปโอนเงิน"
                     placeholder="เลือกไฟล์รูปภาพสลิป"
-                    onChange={(e) => setSlipFile(e.target.files?.[0] || null)} 
+                    onChange={handleSlipChange}
+                    disabled={isCompressing}
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
                   />
                   {slipFile ? (
-                    <div className="relative w-full h-48 border-2 border-dashed border-blue-300 rounded-xl overflow-hidden bg-blue-50/50 flex flex-col items-center justify-center group">
+                    <div className="mt-3 relative w-full h-48 border-2 border-dashed border-blue-300 rounded-xl overflow-hidden bg-blue-50/50 flex flex-col items-center justify-center group">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={URL.createObjectURL(slipFile)} alt="Slip preview" className="max-h-full max-w-full object-contain p-2" />
                       <button 
                         type="button"
                         onClick={() => setSlipFile(null)} 
-                        className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-red-500 p-2 rounded-full shadow-sm hover:bg-red-50 hover:scale-105 transition-all"
+                        className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-red-500 p-2 rounded-full shadow-sm hover:bg-red-50 hover:scale-105 transition-all disabled:opacity-50"
                         title="ลบรูปภาพ"
+                        disabled={isCompressing}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -851,7 +880,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl bg-white hover:bg-gray-50 hover:border-blue-400 transition-colors cursor-pointer group">
+                    <label className={`mt-3 flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl bg-white transition-colors ${isCompressing ? 'cursor-wait' : 'hover:bg-gray-50 hover:border-blue-400 cursor-pointer group'}`}>
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
                         <UploadCloud className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
                         <p className="text-sm text-gray-600 font-medium group-hover:text-blue-600 transition-colors">คลิกเพื่ออัปโหลดสลิป</p>
@@ -861,7 +890,8 @@ export default function CheckoutPage() {
                         type="file" 
                         accept="image/*" 
                         className="hidden" 
-                        onChange={(e) => setSlipFile(e.target.files?.[0] || null)} 
+                        onChange={handleSlipChange}
+                        disabled={isCompressing}
                       />
                     </label>
                   )}

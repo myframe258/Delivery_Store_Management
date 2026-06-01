@@ -26,13 +26,21 @@ interface Category {
   parent_id?: string | null;
 }
 
+interface Promotion {
+  id: string;
+  title: string;
+  image_url: string;
+  target_url: string | null;
+}
+
 interface StorefrontClientProps {
   products: Product[];
   categories: Category[];
   branchId: string;
+  promotions?: Promotion[];
 }
 
-export default function StorefrontClient({ products, categories, branchId }: StorefrontClientProps) {
+export default function StorefrontClient({ products, categories, branchId, promotions = [] }: StorefrontClientProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
@@ -40,6 +48,7 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   const [cartAnimation, setCartAnimation] = useState(false);
   const [prevItemCount, setPrevItemCount] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [currentBanner, setCurrentBanner] = useState(0);
 
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
   const cartItems = useCartStore((state) => state.items || []);
@@ -98,6 +107,15 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
     return () => { document.body.style.overflow = ''; };
   }, [isCartOpen]);
 
+  // ระบบเล่นสไลด์แบนเนอร์อัตโนมัติ (Auto-play Carousel)
+  useEffect(() => {
+    if (!promotions || promotions.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentBanner((prev) => (prev + 1) % promotions.length);
+    }, 5000); // เปลี่ยนรูปทุก 5 วินาที
+    return () => clearInterval(timer);
+  }, [promotions]);
+
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // กรองสินค้าแบบเรียลไทม์
@@ -125,7 +143,40 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   };
 
   return (
-    <div className="w-full flex flex-col lg:flex-row gap-8 items-start relative">
+    <div className="w-full flex flex-col gap-6">
+      
+      {/* --- Promotion Banners --- */}
+      {promotions.length > 0 && (
+        <section className="relative w-full rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shadow-sm aspect-[16/7] md:aspect-[24/7] lg:aspect-[28/7] group">
+          {promotions.map((promo, index) => (
+            <a
+              key={promo.id}
+              href={promo.target_url || '#'}
+              target={promo.target_url ? "_blank" : "_self"}
+              className={`absolute inset-0 transition-opacity duration-1000 ${index === currentBanner ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
+              onClick={(e) => { if (!promo.target_url) e.preventDefault(); }}
+            >
+              <Image src={promo.image_url} alt={promo.title} fill className="object-cover" priority={index === 0} />
+            </a>
+          ))}
+
+          {/* จุดนำทาง (Carousel Indicators) */}
+          {promotions.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+              {promotions.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentBanner(index)}
+                  aria-label={`ไปที่แบนเนอร์ที่ ${index + 1}`}
+                  className={`h-1.5 rounded-full shadow-sm transition-all duration-300 ${index === currentBanner ? 'w-6 bg-blue-600' : 'w-1.5 bg-white/60 hover:bg-white'}`}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      <div className="w-full flex flex-col lg:flex-row gap-8 items-start relative">
       
       {/* --- Mobile: Sticky Tab & Search --- */}
       <div className="lg:hidden sticky top-14 md:top-16 z-30 bg-gray-50 pt-2 pb-3 -mx-6 px-6 w-[calc(100%+3rem)] space-y-3 shadow-sm border-b border-gray-200/60">
@@ -597,6 +648,7 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

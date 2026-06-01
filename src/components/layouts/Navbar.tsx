@@ -135,24 +135,30 @@ export default function Navbar() {
         <div className="flex items-center gap-4">
 
           {/* ตะกร้าสินค้า */}
-          <Link href="/checkout" className="relative p-2 hover:bg-slate-50 rounded-full transition">
+          {/* <Link href="/checkout" className="relative p-2 hover:bg-slate-50 rounded-full transition">
             <ShoppingCart className="w-6 h-6 text-slate-700" />
             {cartItemCount > 0 && (
               <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
                 {cartItemCount}
               </span>
             )}
-          </Link>
+          </Link> */}
 
-          <div className="w-px h-6 bg-gray-300 hidden sm:block"></div>
+          {/* <div className="w-px h-6 bg-gray-300 hidden sm:block"></div> */}
 
           {/* Login / Logout Section */}
           {user ? (
             <div className="flex items-center gap-2 sm:gap-3">
-              <Link href="/profile" className="flex items-center gap-2 bg-slate-50 hover:bg-blue-50 px-2 sm:px-3 py-1.5 rounded-full border border-gray-100 hover:border-blue-200 transition group" title="จัดการโปรไฟล์">
-                <User className="w-4 h-4 text-slate-500 group-hover:text-blue-600 transition" />
+              <Link href="/profile" className="flex items-center gap-2 bg-slate-50 hover:bg-blue-50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-gray-100 hover:border-blue-200 transition group" title="จัดการโปรไฟล์">
+                {user.user_metadata?.avatar_url ? (
+                  <img src={user.user_metadata.avatar_url} alt="Profile" className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover border border-white shadow-sm" />
+                ) : (
+                  <User className="w-5 h-5 text-slate-500 group-hover:text-blue-600 transition" />
+                )}
                 <div className="hidden sm:flex flex-col items-start justify-center">
-                  <span className="text-xs font-medium text-slate-700 max-w-[80px] truncate leading-none group-hover:text-blue-700">{user.email?.split('@')[0]}</span>
+                  <span className="text-xs font-medium text-slate-700 max-w-[100px] truncate leading-none group-hover:text-blue-700">
+                    {user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0]}
+                  </span>
                   <span className="text-[9px] font-bold text-blue-600 mt-1 leading-none">{getRoleDisplay(role)}</span>
                 </div>
               </Link>

@@ -6,7 +6,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
 import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
-import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info, Home, Navigation } from 'lucide-react';
+import { Plus, Minus, Trash2, AlertCircle, CheckCircle, Store, Truck, MapPin as MapPinIcon, Info, Home, Navigation, QrCode, Wallet, UploadCloud } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -618,16 +618,17 @@ export default function CheckoutPage() {
                 {slots.length === 0 ? (
                   <p className="text-sm text-gray-500">กำลังโหลดรอบจัดส่ง...</p>
                 ) : (
-                  <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {slots.filter(s => !s.slot_type || s.slot_type === 'both' || s.slot_type === deliveryMethod).map(slot => {
                       const isDisabled = deliveryDate === todayStr && currentHour >= slot.cut_off_hour;
                       return (
-                        <label key={slot.id} className={`flex-1 min-w-[120px] flex items-center justify-center px-4 py-3 border rounded-xl cursor-pointer transition ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === slot.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
+                        <label key={slot.id} className={`flex flex-col items-center justify-center px-2 py-3 border rounded-xl cursor-pointer transition text-center ${isDisabled ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : deliverySlot === slot.id ? 'border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600 shadow-sm' : 'border-gray-300 hover:border-blue-400 bg-white'}`}>
                           <input type="radio" name="slot" value={slot.id} className="sr-only"
                             disabled={isDisabled}
                             checked={deliverySlot === slot.id}
                             onChange={() => setDeliverySlot(slot.id)} />
-                          <span className="text-sm font-medium text-center">{slot.name}<br /><span className="text-xs font-normal opacity-80">({slot.time_range})</span></span>
+                          <span className="text-sm font-medium">{slot.name}</span>
+                          <span className="text-xs font-normal opacity-80 mt-1">{slot.time_range}</span>
                         </label>
                       )
                     })}
@@ -774,14 +775,44 @@ export default function CheckoutPage() {
           {/* ส่วนเลือกช่องทางชำระเงิน */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">ช่องทางการชำระเงิน</h2>
-            <div className="space-y-3">
-              <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition ${paymentMethod === 'promptpay' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
-                <input type="radio" name="paymentMethod" value="promptpay" className="mr-3" checked={paymentMethod === 'promptpay'} onChange={() => setPaymentMethod('promptpay')} />
-                <span className="font-medium">โอนเงินผ่านบัญชีธนาคาร (PromptPay)</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="relative cursor-pointer group">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="promptpay"
+                  className="peer sr-only"
+                  checked={paymentMethod === 'promptpay'}
+                  onChange={() => setPaymentMethod('promptpay')}
+                />
+                <div className="p-4 rounded-xl border-2 border-gray-100 hover:bg-gray-50 peer-checked:border-blue-500 peer-checked:bg-blue-50 transition-all flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                    <QrCode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 peer-checked:text-blue-700">โอนเงิน (PromptPay)</h4>
+                    <p className="text-xs text-gray-500 mt-1">สแกน QR Code พร้อมแนบสลิป</p>
+                  </div>
+                </div>
               </label>
-              <label className={`flex items-center p-4 border rounded-xl cursor-pointer transition ${paymentMethod === 'cod' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
-                <input type="radio" name="paymentMethod" value="cod" className="mr-3" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />
-                <span className="font-medium">{deliveryMethod === 'delivery' ? 'ชำระเงินปลายทาง (COD)' : 'ชำระเงินที่สาขา (Pay at Store)'}</span>
+              <label className="relative cursor-pointer group">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="cod"
+                  className="peer sr-only"
+                  checked={paymentMethod === 'cod'}
+                  onChange={() => setPaymentMethod('cod')}
+                />
+                <div className="p-4 rounded-xl border-2 border-gray-100 hover:bg-gray-50 peer-checked:border-blue-500 peer-checked:bg-blue-50 transition-all flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800 peer-checked:text-blue-700">{deliveryMethod === 'delivery' ? 'ชำระเงินปลายทาง (COD)' : 'ชำระเงินที่สาขา'}</h4>
+                    <p className="text-xs text-gray-500 mt-1">{deliveryMethod === 'delivery' ? 'จ่ายเงินสดเมื่อรับสินค้า' : 'ชำระที่หน้าเคาน์เตอร์'}</p>
+                  </div>
+                </div>
               </label>
             </div>
 
@@ -803,6 +834,37 @@ export default function CheckoutPage() {
                     onChange={(e) => setSlipFile(e.target.files?.[0] || null)} 
                     className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
                   />
+                  {slipFile ? (
+                    <div className="relative w-full h-48 border-2 border-dashed border-blue-300 rounded-xl overflow-hidden bg-blue-50/50 flex flex-col items-center justify-center group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={URL.createObjectURL(slipFile)} alt="Slip preview" className="max-h-full max-w-full object-contain p-2" />
+                      <button 
+                        type="button"
+                        onClick={() => setSlipFile(null)} 
+                        className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-red-500 p-2 rounded-full shadow-sm hover:bg-red-50 hover:scale-105 transition-all"
+                        title="ลบรูปภาพ"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-xs py-1.5 text-center truncate px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {slipFile.name}
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl bg-white hover:bg-gray-50 hover:border-blue-400 transition-colors cursor-pointer group">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <UploadCloud className="w-8 h-8 text-gray-400 group-hover:text-blue-500 mb-2 transition-colors" />
+                        <p className="text-sm text-gray-600 font-medium group-hover:text-blue-600 transition-colors">คลิกเพื่ออัปโหลดสลิป</p>
+                        <p className="text-xs text-gray-400 mt-1">รองรับไฟล์ JPG, PNG</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => setSlipFile(e.target.files?.[0] || null)} 
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
             )}

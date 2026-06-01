@@ -36,7 +36,7 @@ export default function ProfilePage() {
   const [savingAddress, setSavingAddress] = useState(false);
 
   // Profile State
-  const [profileData, setProfileData] = useState({ name: '', phone: '' });
+  const [profileData, setProfileData] = useState({ name: '', phone: '', avatar_url: '' });
   
   // Address Book State
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -69,7 +69,7 @@ export default function ProfilePage() {
     // ดึงข้อมูลจากตาราง users
     const { data: profile } = await supabase
       .from('users')
-      .select('name, phone')
+      .select('name, phone, avatar_url')
       .eq('id', session.user.id)
       .single();
 
@@ -84,6 +84,7 @@ export default function ProfilePage() {
     setProfileData({
       name: profile?.name || session.user.user_metadata?.name || session.user.user_metadata?.full_name || '',
       phone: profile?.phone || session.user.phone || session.user.user_metadata?.phone || '',
+      avatar_url: profile?.avatar_url || session.user.user_metadata?.avatar_url || '',
     });
 
     if (userAddresses) {
@@ -242,12 +243,20 @@ export default function ProfilePage() {
         </Link>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <User className="w-6 h-6 text-blue-600" />
-              ข้อมูลส่วนตัว
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">อัปเดตข้อมูลสำหรับติดต่อ</p>
+          <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-5">
+            {profileData.avatar_url ? (
+              <img src={profileData.avatar_url} alt="Profile Avatar" className="w-16 h-16 rounded-full object-cover shadow-sm border-2 border-white ring-2 ring-gray-100" />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-white ring-2 ring-gray-100 shadow-sm">
+                <User className="w-8 h-8" />
+              </div>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                ข้อมูลส่วนตัว
+              </h1>
+              <p className="text-gray-500 text-sm mt-1">อัปเดตข้อมูลสำหรับติดต่อ</p>
+            </div>
           </div>
 
           <form onSubmit={handleSaveProfile} className="p-6 space-y-4 border-b border-gray-100">

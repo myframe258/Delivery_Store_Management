@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useDeferredValue } from 'react';
-import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart, Plus, Minus, X } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCartStore } from '@/store/cartStore';
@@ -39,6 +39,7 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
   const [isMounted, setIsMounted] = useState(false);
   const [cartAnimation, setCartAnimation] = useState(false);
   const [prevItemCount, setPrevItemCount] = useState(0);
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
   const cartItems = useCartStore((state) => state.items || []);
@@ -87,6 +88,16 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
     }
   }, [totalItems, prevItemCount, isMounted]);
 
+  // ป้องกันการ Scroll หน้าหลักเมื่อเปิดตะกร้า (Slide-over)
+  useEffect(() => {
+    if (isCartOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isCartOpen]);
+
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // กรองสินค้าแบบเรียลไทม์
@@ -126,8 +137,17 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
             placeholder="ค้นหาสินค้า..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 shadow-sm transition-all"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              title="ล้างการค้นหา"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
         
         {/* Mobile Category */}
@@ -207,8 +227,17 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
               placeholder="ชื่อสินค้า..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-4 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+              className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 shadow-sm transition-all"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                title="ล้างการค้นหา"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -246,21 +275,23 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                   </button>
                   
                   {/* แสดง Subcategories เมื่อ Root ถูกเลือกแบบ Accordion */}
-                  {isRootActive && children.length > 0 && (
-                    <div className="pl-4 pr-2 py-1 flex flex-col space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {children.map((subCat) => (
-                        <button
-                          key={subCat.id}
-                          onClick={() => setSelectedCategory(subCat.id)}
-                          className={`w-full text-left px-4 py-2 rounded-lg text-xs font-medium transition-colors relative before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1.5 before:h-1.5 before:rounded-full ${
-                            selectedCategory === subCat.id ? 'bg-slate-800 text-white shadow-sm before:bg-white' : 'text-slate-600 hover:bg-slate-100 before:bg-slate-300'
-                          }`}
-                        >
-                          {subCat.name}
-                        </button>
-                      ))}
+                  <div className={`grid transition-all duration-300 ease-in-out ${isRootActive && children.length > 0 ? 'grid-rows-[1fr] opacity-100 mt-1' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <div className="pl-4 pr-2 py-1 flex flex-col space-y-1">
+                        {children.map((subCat) => (
+                          <button
+                            key={subCat.id}
+                            onClick={() => setSelectedCategory(subCat.id)}
+                            className={`w-full text-left px-4 py-2 rounded-lg text-xs font-medium transition-colors relative before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1.5 before:h-1.5 before:rounded-full ${
+                              selectedCategory === subCat.id ? 'bg-slate-800 text-white shadow-sm before:bg-white' : 'text-slate-600 hover:bg-slate-100 before:bg-slate-300'
+                            }`}
+                          >
+                            {subCat.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             })}
@@ -308,22 +339,22 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
               return (
               <div 
                 key={product.id} 
-                className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 h-full group relative ${isOutOfStock ? 'border-gray-200 opacity-80' : 'border-slate-200 hover:shadow-lg hover:border-blue-300 hover:-translate-y-1'}`}
+                className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 h-full group relative ${isOutOfStock ? 'border-gray-200 opacity-80' : 'border-slate-200 hover:shadow-xl hover:border-blue-300 hover:-translate-y-1'}`}
               >
                 {/* Visual Badges (บ่งบอกประเภทหน่วยนับ) */}
                 <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
                   {step < 1 ? (
-                    <span className="bg-blue-600/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">⚖️ ชั่งตามน้ำหนัก</span>
+                    <span className="bg-blue-50/95 backdrop-blur-sm text-blue-600 border border-blue-100/50 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm">⚖️ ชั่งตามน้ำหนัก</span>
                   ) : (
-                    <span className="bg-slate-800/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">📦 แพ็ก / ชิ้น</span>
+                    <span className="bg-slate-50/95 backdrop-blur-sm text-slate-600 border border-slate-100/50 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm">📦 แพ็ก / ชิ้น</span>
                   )}
                 </div>
 
-                <div className="w-full h-40 sm:h-48 bg-slate-50 relative flex-shrink-0 overflow-hidden">
+                <div className="w-full aspect-[4/3] bg-slate-50 relative flex-shrink-0 overflow-hidden">
                   {/* Overlay กรณีสินค้าหมด */}
                   {isOutOfStock && (
-                    <div className="absolute inset-0 bg-black/40 z-20 flex items-center justify-center backdrop-blur-[1px]">
-                      <span className="bg-red-600 text-white font-bold px-4 py-1.5 rounded-lg shadow-lg rotate-[-10deg] text-sm sm:text-base border-2 border-white">
+                    <div className="absolute inset-0 bg-black/10 z-20 flex items-center justify-center backdrop-blur-[2px]">
+                      <span className="bg-white/95 text-red-600 font-bold px-4 py-1.5 rounded-xl shadow-lg rotate-[-5deg] text-sm sm:text-base border border-red-100">
                         สินค้าหมด
                       </span>
                     </div>
@@ -334,7 +365,7 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                       alt={product.name} 
                       fill 
                       sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-                      className={`object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'group-hover:scale-105'}`} 
+                      className={`object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale opacity-80' : 'group-hover:scale-110'}`} 
                     />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
@@ -358,10 +389,10 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
                         ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
                       </span>
                       {product.is_track_stock !== false && (
-                        <span className={`shrink-0 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-md ${
-                          isOutOfStock ? 'text-red-700 bg-red-100' :
-                          isLowStock ? 'text-orange-700 bg-orange-100' :
-                          'text-emerald-700 bg-emerald-100'
+                        <span className={`shrink-0 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-md border ${
+                          isOutOfStock ? 'text-red-600 bg-red-50 border-red-100' :
+                          isLowStock ? 'text-orange-600 bg-orange-50 border-orange-100' :
+                          'text-emerald-600 bg-emerald-50 border-emerald-100'
                         }`}>
                           {isOutOfStock ? 'สินค้าหมด' : 
                            isLowStock ? `ใกล้หมด! เหลือ ${product.stock_count} ${product.unit_name || ''}` : 
@@ -438,47 +469,134 @@ export default function StorefrontClient({ products, categories, branchId }: Sto
         )}
       </main>
 
-      {/* --- Desktop: Cart Notification Toast --- */}
-      {isMounted && (
-        <div 
-          className={`hidden lg:flex fixed top-24 right-8 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl shadow-lg z-50 transition-all duration-300 items-center gap-3 ${
-            cartAnimation ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
-          }`}
-        >
-          <div className="bg-emerald-100 p-2 rounded-full">
-            <ShoppingCart className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-emerald-900">หยิบสินค้าลงตะกร้าแล้ว</p>
-            <p className="text-xs text-emerald-700 mt-0.5">ยอดรวม {formatNumber(totalItems)} รายการ (฿{totalPrice.toLocaleString()})</p>
-          </div>
+      {/* --- Floating Cart Button (All devices) --- */}
+      {isMounted && totalItems > 0 && (
+        <div className="fixed bottom-6 left-4 right-4 lg:left-auto lg:right-8 z-50 flex justify-center lg:justify-end pointer-events-none">
+          <button 
+            onClick={() => setIsCartOpen(true)}
+            className={`pointer-events-auto w-full max-w-md lg:w-auto lg:min-w-[280px] bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-600/40 p-4 flex items-center justify-between gap-4 active:scale-95 transition-all duration-300 hover:bg-blue-700 ${cartAnimation ? 'scale-105 ring-4 ring-blue-400/40 bg-blue-500' : 'scale-100'}`}
+          >
+            <div className="flex items-center gap-4">
+              <div className="relative flex-shrink-0">
+                <ShoppingCart className={`w-6 h-6 ${cartAnimation ? 'animate-bounce' : ''}`} />
+                <span className={`absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full border-2 border-white transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
+                  {formatNumber(totalItems)}
+                </span>
+              </div>
+              <div className="flex flex-col items-start text-left">
+                <span className="font-semibold text-sm">ดูตะกร้าสินค้า</span>
+                <span className="text-xs text-blue-100 hidden lg:block">{formatNumber(totalItems)} รายการ</span>
+              </div>
+            </div>
+            <div className="font-bold text-lg">
+              ฿{totalPrice.toLocaleString()}
+            </div>
+          </button>
         </div>
       )}
 
-      {/* --- Floating Cart Button (Mobile & Tablet) --- */}
-      {isMounted && totalItems > 0 && (
-        // ใช้ pointer-events-none ที่ container เพื่อให้กดทะลุพื้นที่ว่างได้ แต่ใช้ auto กับตัว Link
-        <div className="lg:hidden fixed bottom-6 left-0 right-0 px-4 sm:px-6 z-50 pointer-events-none">
-          <Link href={`/checkout?branchId=${branchId}`} className="pointer-events-auto block max-w-md mx-auto">
-            <div className={`bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-600/40 p-4 flex items-center justify-between active:scale-95 transition-all duration-300 ${cartAnimation ? 'scale-105 ring-4 ring-blue-400/40 bg-blue-500' : 'scale-100'}`}>
-              <div className="flex items-center gap-4">
-                <div className="relative flex-shrink-0">
-                  <ShoppingCart className={`w-6 h-6 ${cartAnimation ? 'animate-bounce' : ''}`} />
-                  <span className={`absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full border-2 border-white transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
-                    {formatNumber(totalItems)}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-semibold text-sm">ดูตะกร้าสินค้า</span>
-                </div>
+      {/* --- Slide-over Cart --- */}
+      <div className={`fixed inset-0 z-[100] transition-all duration-300 ${isCartOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+        {/* Backdrop */}
+        <div 
+          className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 ${isCartOpen ? 'opacity-100' : 'opacity-0'}`} 
+          onClick={() => setIsCartOpen(false)} 
+        />
+        
+        {/* Panel */}
+        <div className={`absolute top-0 right-0 w-full sm:w-[420px] h-full bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <ShoppingCart className="w-6 h-6 text-blue-600" />
+              ตะกร้าสินค้า
+            </h2>
+            <button 
+              onClick={() => setIsCartOpen(false)} 
+              title="ปิดตะกร้าสินค้า"
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Cart Items */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 bg-slate-50 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+            {branchCartItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+                <ShoppingCart className="w-12 h-12 opacity-20" />
+                <p className="font-medium text-slate-500">ไม่มีสินค้าในตะกร้า</p>
               </div>
-              <div className="font-bold text-lg">
-                ฿{totalPrice.toLocaleString()}
-              </div>
+            ) : (
+              branchCartItems.map((item: any) => (
+                <div key={item.id} className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-100 flex gap-3 sm:gap-4 items-center group">
+                  <div className="relative w-16 h-16 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100">
+                    {item.image_url ? (
+                      <Image src={item.image_url} alt={item.name} fill sizes="64px" className="object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
+                        <Package className="w-6 h-6 opacity-50" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-sm text-slate-800 truncate" title={item.name}>{item.name}</h4>
+                    <div className="text-blue-600 font-bold text-sm mt-0.5">฿{item.price.toLocaleString()} {item.unit_name ? <span className="text-xs text-slate-400 font-normal">/ {item.unit_name}</span> : ''}</div>
+                  </div>
+                  
+                  {/* Quantity Control */}
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg overflow-hidden shrink-0">
+                    <button 
+                      onClick={() => {
+                        const step = item.step_value || 1;
+                        const min = item.min_value || 1;
+                        const next = Number((item.quantity - step).toFixed(2));
+                        if (next >= min) updateQuantity(item.id, next);
+                        else removeItem(item.id);
+                      }}
+                      title="ลดจำนวน"
+                      className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-blue-600 transition-colors"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-xs font-bold w-6 text-center text-slate-700">
+                      {Number.isInteger(item.quantity) ? item.quantity : item.quantity.toFixed(2).replace(/\.?0+$/, '')}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        const step = item.step_value || 1;
+                        updateQuantity(item.id, Number((item.quantity + step).toFixed(2)));
+                      }}
+                      title="เพิ่มจำนวน"
+                      className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-blue-600 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 bg-white border-t border-slate-100 shadow-[0_-4px_20px_-15px_rgba(0,0,0,0.1)]">
+            <div className="flex justify-between items-center mb-4 text-slate-600">
+              <span className="font-medium">ยอดรวมทั้งหมด</span>
+              <span className="text-2xl font-bold text-blue-600">฿{totalPrice.toLocaleString()}</span>
             </div>
-          </Link>
+            <Link 
+              href={`/checkout?branchId=${branchId}`}
+              className={`w-full font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md ${branchCartItems.length > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 active:scale-95' : 'bg-slate-100 text-slate-400 shadow-none pointer-events-none'}`}
+              onClick={(e) => {
+                if (branchCartItems.length === 0) e.preventDefault();
+              }}
+            >
+              ดำเนินการชำระเงิน
+            </Link>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

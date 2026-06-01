@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BranchGuard from '@/components/utilities/BranchGuard';
 import StorefrontClient from './StorefrontClient';
-import { MapPin, Phone, ShoppingBag, CheckCircle2 } from 'lucide-react';
+import { MapPin, Phone, ShoppingBag, CheckCircle2, Megaphone, Image as ImageIcon } from 'lucide-react';
 
 export const dynamic = 'force-dynamic'; // เพิ่มบรรทัดนี้เพื่อบังคับให้ Next.js ดึงข้อมูลใหม่เสมอ ไม่จำ Cache โบราณ
 
@@ -21,7 +21,6 @@ type ProductRecord = {
     min_value: number;
   } | any;
 };
-
 
 type InventoryRecord = {
   stock_count: number;
@@ -109,40 +108,67 @@ export default async function BranchStorefrontPage({
   return (
     <>
       <BranchGuard />
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-5xl mx-auto">
-        {/* Header ของสาขา */}
-        <header className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8 mt-2 md:mt-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-blue-600"></div>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div className="pl-2 md:pl-4">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{branch.name}</h1>
-                <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                  <CheckCircle2 className="w-4 h-4" /> เปิดให้บริการ
-                </span>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-5xl mx-auto">
+          {/* Header ของสาขา */}
+          <header className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 mt-2 md:mt-4 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-blue-600"></div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="pl-2 md:pl-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{branch.name}</h1>
+                  <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                    <CheckCircle2 className="w-4 h-4" /> เปิดให้บริการ
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 text-sm text-gray-500 mt-4">
+                  <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-500" /> {branch.address}</div>
+                  {branch.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-blue-500" /> {branch.phone}</div>}
+                </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 text-sm text-gray-500 mt-4">
-                <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-500" /> {branch.address}</div>
-                {branch.phone && <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-blue-500" /> {branch.phone}</div>}
-              </div>
+              <Link
+                href={`/checkout?branchId=${branch.id}`}
+                className="group relative flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3.5 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-200 transition-all active:scale-[0.98] w-full md:w-auto overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
+                <ShoppingBag className="w-5 h-5 relative z-10" /> 
+                <span className="relative z-10">ดำเนินการชำระเงิน</span>
+              </Link>
             </div>
-            <Link
-              href={`/checkout?branchId=${branch.id}`}
-              className="group relative flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3.5 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-blue-200 transition-all active:scale-[0.98] w-full md:w-auto overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
-              <ShoppingBag className="w-5 h-5 relative z-10" /> 
-              <span className="relative z-10">ดำเนินการชำระเงิน</span>
-            </Link>
-          </div>
-        </header>
+          </header>
 
-        {/* Client Component จัดการแถบเมนูแยกหมวดหมู่และ Grid สินค้า */}
-        <StorefrontClient products={products} categories={categories || []} branchId={branchId} />
+          {/* ----------------------------------------------------- */}
+          {/* ส่วนพื้นที่โฆษณา / โปรโมชัน (Ad Banner Placeholder) */}
+          {/* ----------------------------------------------------- */}
+          <section className="mb-8 relative w-full rounded-2xl overflow-hidden bg-gradient-to-br from-slate-200 via-slate-100 to-white border border-slate-200 shadow-sm aspect-[16/7] md:aspect-[24/7] lg:aspect-[28/7] flex items-center justify-center group cursor-pointer hover:shadow-md transition-shadow">
+            
+            {/* พื้นหลังตกแต่ง UI (Graphic Decoration) */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50 -translate-x-1/2 translate-y-1/2"></div>
 
+            <div className="text-center p-6 md:p-8 relative z-10 bg-white/70 backdrop-blur-md rounded-2xl shadow-sm border border-white/50 mx-4 md:mx-auto max-w-xs md:max-w-md">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-white/90 rounded-full flex items-center justify-center mx-auto mb-3 md:mb-4 shadow-sm text-blue-600 group-hover:scale-110 group-hover:shadow-md transition-all duration-300">
+                <Megaphone className="w-6 h-6 md:w-8 md:h-8" />
+              </div>
+              <h3 className="text-lg md:text-2xl font-bold text-slate-800 mb-1 md:mb-2">พื้นที่โฆษณาและโปรโมชัน</h3>
+              <p className="text-xs md:text-sm text-slate-600 flex items-center justify-center gap-1.5">
+                <ImageIcon className="w-4 h-4" /> เตรียมพร้อมสำหรับเชื่อมต่อระบบจัดการแบนเนอร์
+              </p>
+            </div>
+
+            {/* Mockup Carousel Indicators ด้านล่าง */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+              <div className="w-6 h-1.5 bg-blue-600 rounded-full shadow-sm transition-all duration-300"></div>
+              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full shadow-sm hover:bg-slate-400 transition-all duration-300"></div>
+              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full shadow-sm hover:bg-slate-400 transition-all duration-300"></div>
+            </div>
+          </section>
+
+          {/* Client Component จัดการแถบเมนูแยกหมวดหมู่และ Grid สินค้า */}
+          <StorefrontClient products={products} categories={categories || []} branchId={branchId} />
+
+        </div>
       </div>
-    </div>
     </>
   );
 }

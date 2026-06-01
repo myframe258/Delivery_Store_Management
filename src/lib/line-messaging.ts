@@ -30,6 +30,11 @@ export async function sendLinePushMessage(toUserId: string, messageText: string)
     });
 
     const data = await response.json();
+
+    if (!response.ok) {
+      console.error('LINE API Error Details:', JSON.stringify(data, null, 2));
+    }
+
     return response.ok;
   } catch (error) {
     console.error('Error sending LINE message:', error);

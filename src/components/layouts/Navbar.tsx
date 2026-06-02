@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
-import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn, Megaphone } from 'lucide-react';
+import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn, Megaphone, ChevronDown, Settings, List } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
@@ -75,43 +75,81 @@ export default function Navbar() {
           <Link href="/" className="hover:text-blue-600 transition">หน้าหลัก (ค้นหาสาขา)</Link>
 
           {role === 'super_admin' && (
-            <>
-              <Link href="/super-admin/branches" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <Store className="w-4 h-4" /> จัดการสาขา
-              </Link>
-              <Link href="/super-admin/products" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <Package className="w-4 h-4" /> จัดการสินค้า
-              </Link>
-              <Link href="/super-admin/users" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <User className="w-4 h-4" /> จัดการสิทธิ์
-              </Link>
-              <Link href="/super-admin/categories" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <MapIcon className="w-4 h-4" /> จัดการหมวดหมู่
-              </Link>
-              <Link href="/super-admin/delivery-slots" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <MapIcon className="w-4 h-4" /> จัดการรอบจัดส่ง
-              </Link>
-              <Link href="/super-admin/units" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <MapIcon className="w-4 h-4" /> จัดการหน่วย
-              </Link>
-              <Link href="/super-admin/promotions" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <Megaphone className="w-4 h-4" /> แบนเนอร์โปรโมชัน
-              </Link>
-            </>
+            <div className="relative group h-full flex items-center">
+              <button className="flex items-center gap-1 hover:text-blue-600 transition py-2">
+                <Settings className="w-4 h-4" /> จัดการระบบ <ChevronDown className="w-3 h-3" />
+              </button>
+              <div className="absolute top-full left-0 mt-0 w-64 bg-white border border-gray-100 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden flex flex-col py-2 z-50">
+                
+                <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">ร้านค้าและพนักงาน</div>
+                <Link href="/super-admin/branches" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Store className="w-4 h-4" /> ข้อมูลสาขา
+                </Link>
+                <Link href="/super-admin/users" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <User className="w-4 h-4" /> สิทธิ์ผู้ใช้งาน
+                </Link>
+                
+                <div className="w-full h-px bg-gray-100 my-1"></div>
+                <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">สินค้าและโปรโมชัน</div>
+                <Link href="/super-admin/products" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Package className="w-4 h-4" /> ฐานข้อมูลสินค้า (Master)
+                </Link>
+                <Link href="/super-admin/branch-discounts" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Store className="w-4 h-4" /> สต็อกรายสาขา
+                </Link>
+                <Link href="/super-admin/promotions" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Megaphone className="w-4 h-4" /> แบนเนอร์โปรโมชัน
+                </Link>
+                
+                <div className="w-full h-px bg-gray-100 my-1"></div>
+                <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">ตั้งค่าพื้นฐาน</div>
+                <Link href="/super-admin/categories" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <List className="w-4 h-4" /> หมวดหมู่สินค้า
+                </Link>
+                <Link href="/super-admin/units" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Package className="w-4 h-4" /> หน่วยนับสินค้า
+                </Link>
+                <Link href="/super-admin/delivery-slots" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Truck className="w-4 h-4" /> รอบจัดส่ง
+                </Link>
+              </div>
+            </div>
           )}
 
           {role === 'branch_admin' && (
-            <>
-              <Link href="/branch-admin/inventory" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <Package className="w-4 h-4" /> จัดการสต็อก
-              </Link>
-              <Link href="/branch-admin/batching" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <MapIcon className="w-4 h-4" /> จัดรอบส่ง
-              </Link>
-            </>
+             <div className="relative group h-full flex items-center">
+               <button className="flex items-center gap-1 hover:text-blue-600 transition py-2">
+                 <Store className="w-4 h-4" /> จัดการสาขา <ChevronDown className="w-3 h-3" />
+               </button>
+               <div className="absolute top-full left-0 mt-0 w-56 bg-white border border-gray-100 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden flex flex-col py-2 z-50">
+                 
+                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">คลังสินค้า</div>
+                 <Link href="/branch-admin/inventory" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                   <Package className="w-4 h-4" /> จัดการสต็อกสินค้า
+                 </Link>
+                 
+                 <div className="w-full h-px bg-gray-100 my-1"></div>
+                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">จัดการออเดอร์</div>
+                 <Link href="/picker/dashboard" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                   <Package className="w-4 h-4" /> งานจัดของ
+                 </Link>
+                 <Link href="/branch-admin/batching" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                   <MapIcon className="w-4 h-4" /> จัดรอบส่งสินค้า
+                 </Link>
+                 
+                 <div className="w-full h-px bg-gray-100 my-1"></div>
+                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">พนักงานจัดส่ง / นัดรับ</div>
+                 <Link href="/picker/pickups" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                   <Store className="w-4 h-4" /> ออเดอร์นัดรับที่ร้าน
+                 </Link>
+                 <Link href="/rider/batches" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                   <Truck className="w-4 h-4" /> หน้าจอคนขับ (Rider)
+                 </Link>
+               </div>
+             </div>
           )}
 
-          {(role === 'branch_admin' || role === 'picker') && (
+          {role === 'picker' && (
             <>
               <Link href="/picker/dashboard" className="flex items-center gap-1 hover:text-blue-600 transition">
                 <Package className="w-4 h-4" /> งานจัดของ
@@ -124,12 +162,10 @@ export default function Navbar() {
           )}
 
 
-          {(role === 'branch_admin' || role === 'rider') && (
-            <>
-              <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
-                <Truck className="w-4 h-4" /> งานส่งของ
-              </Link>
-            </>
+          {role === 'rider' && (
+            <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
+              <Truck className="w-4 h-4" /> งานส่งของ
+            </Link>
           )}
 
           {(role === 'customer' || !role) && (

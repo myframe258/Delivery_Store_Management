@@ -86,7 +86,7 @@ export default async function BranchStorefrontPage({
   const { data: promotions } = await supabase
     .from('branch_promotions')
     .select('id, title, image_url, target_url')
-    .eq('branch_id', branchId)
+    .or(`branch_id.eq.${branchId},branch_id.is.null`)
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 

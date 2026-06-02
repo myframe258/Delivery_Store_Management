@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
-import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn } from 'lucide-react';
+import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn, Megaphone } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
@@ -94,6 +94,9 @@ export default function Navbar() {
               <Link href="/super-admin/units" className="flex items-center gap-1 hover:text-blue-600 transition">
                 <MapIcon className="w-4 h-4" /> จัดการหน่วย
               </Link>
+              <Link href="/super-admin/promotions" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <Megaphone className="w-4 h-4" /> แบนเนอร์โปรโมชัน
+              </Link>
             </>
           )}
 
@@ -122,9 +125,11 @@ export default function Navbar() {
 
 
           {(role === 'branch_admin' || role === 'rider') && (
-            <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
-              <Truck className="w-4 h-4" /> งานส่งของ
-            </Link>
+            <>
+              <Link href="/rider/batches" className="flex items-center gap-1 hover:text-blue-600 transition">
+                <Truck className="w-4 h-4" /> งานส่งของ
+              </Link>
+            </>
           )}
 
           {(role === 'customer' || !role) && (

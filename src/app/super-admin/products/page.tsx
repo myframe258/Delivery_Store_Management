@@ -37,6 +37,8 @@ export default function SuperAdminProductsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importSuccessCount, setImportSuccessCount] = useState<number>(0);
+  const [missingMasterData, setMissingMasterData] = useState<{ categories: string[], units: string[] } | null>(null);
+  const [pendingFileData, setPendingFileData] = useState<any[] | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -333,6 +335,8 @@ export default function SuperAdminProductsPage() {
     setIsImporting(true);
     setImportErrors([]);
     setImportSuccessCount(0);
+    setMissingMasterData(null);
+    setPendingFileData(null);
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -343,141 +347,220 @@ export default function SuperAdminProductsPage() {
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
 
-        const errors: string[] = [];
-        const productsToInsert: any[] = [];
-        const productsToUpdate: any[] = [];
-
-        // 1. Data Parsing & Validation
-        for (let i = 0; i < data.length; i++) {
-          const row: any = data[i];
-          const rowNum = i + 2; // +2 เพราะ index เริ่ม 0 และมี Header ในแถวแรก
-
-          const id = row.ID ? String(row.ID).trim() : null;
-
-          if (!id && (!row.Name || String(row.Name).trim() === '')) {
-            errors.push(`แถวที่ ${rowNum}: ข้อมูล "ชื่อสินค้า" ห้ามว่าง (สำหรับการเพิ่มใหม่)`);
-            continue;
-          }
-          if (row.Price !== undefined && (isNaN(Number(row.Price)) || Number(row.Price) < 0)) {
-            errors.push(`แถวที่ ${rowNum}: "ราคา" ต้องเป็นตัวเลขที่มากกว่าหรือเท่ากับ 0`);
-            continue;
-          }
-
-          let category_id = undefined;
-          if (row.Category_Name) {
-            const cat = categories.find(c => c.name === String(row.Category_Name).trim());
-            if (!cat) {
-              errors.push(`แถวที่ ${rowNum}: ไม่พบประเภทสินค้า "${row.Category_Name}" ในระบบ`);
-              continue;
-            }
-            category_id = cat.id;
-          }
-
-          let unit_id = undefined;
-          if (row.Unit_Name) {
-            const unit = units.find(u => u.name === String(row.Unit_Name).trim());
-            if (!unit) {
-              errors.push(`แถวที่ ${rowNum}: ไม่พบหน่วยนับ "${row.Unit_Name}" ในระบบ`);
-              continue;
-            }
-            unit_id = unit.id;
-          }
-        
-        const is_track_stock = row.Track_Stock ? String(row.Track_Stock).trim().toLowerCase() !== 'no' : true;
-
-          if (id) {
-            // โหมดอัปเดตข้อมูลเดิม (Upsert)
-            const existing = products.find(p => p.id === id);
-            if (!existing) {
-              errors.push(`แถวที่ ${rowNum}: ไม่พบสินค้ารหัส ${id} ในระบบ (ไม่สามารถอัปเดตได้)`);
-              continue;
-            }
-            productsToUpdate.push({
-              id: id,
-              name: row.Name !== undefined ? String(row.Name).trim() : existing.name,
-              description: row.Description !== undefined ? String(row.Description).trim() : existing.description,
-              price: row.Price !== undefined ? Number(row.Price) : existing.price,
-              image_url: row.Image_URL !== undefined ? String(row.Image_URL).trim() : existing.image_url,
-            category_id: category_id !== undefined ? category_id : existing.category_id,
-            unit_id: unit_id !== undefined ? unit_id : existing.unit_id,
-            is_track_stock: row.Track_Stock !== undefined ? is_track_stock : existing.is_track_stock
-            });
-          } else {
-            // โหมดเพิ่มข้อมูลใหม่ (Insert)
-            const initialStock = isNaN(Number(row.Initial_Stock_Per_Branch)) ? 0 : Number(row.Initial_Stock_Per_Branch);
-            productsToInsert.push({
-              name: String(row.Name).trim(),
-              description: row.Description ? String(row.Description).trim() : null,
-              price: Number(row.Price),
-              image_url: row.Image_URL ? String(row.Image_URL).trim() : null,
-              category_id: category_id || null,
-              unit_id: unit_id || null,
-            _initialStock: initialStock,
-            is_track_stock: is_track_stock
-            });
-          }
-        }
-
-        if (errors.length > 0) {
-          setImportErrors(errors);
-          setIsImporting(false);
-          return; // หากมี Error แม้แต่แถวเดียว จะยกเลิกการนำเข้าทั้งหมดเพื่อความปลอดภัย
-        }
-
-        if (productsToInsert.length === 0 && productsToUpdate.length === 0) {
-          setImportErrors(['ไม่พบข้อมูลสินค้าที่ถูกต้องในไฟล์']);
-          setIsImporting(false);
-          return;
-        }
-
-        // 2. อัปเดตข้อมูลเดิม (Upsert) ถ้ามีการแก้ไขมาจากไฟล์ Export
-        if (productsToUpdate.length > 0) {
-          const { error: updateError } = await supabase.from('products').upsert(productsToUpdate);
-          if (updateError) throw updateError;
-        }
-
-        // 3. เพิ่มข้อมูลใหม่ (Insert) ถ้าในไฟล์ไม่มีระบุ ID
-        if (productsToInsert.length > 0) {
-          const insertPayload = productsToInsert.map(({ _initialStock, ...rest }) => rest);
-          const { data: insertedProducts, error: insertError } = await supabase
-            .from('products')
-            .insert(insertPayload)
-            .select('id');
-
-          if (insertError) throw insertError;
-
-          if (insertedProducts && branches.length > 0) {
-            const inventoryPayload = insertedProducts.flatMap((insertedProduct, index) => {
-              const initialStock = productsToInsert[index]._initialStock;
-              return branches.map(branch => ({
-                branch_id: branch.id,
-                product_id: insertedProduct.id,
-                stock_count: initialStock,
-                status: initialStock > 0 ? 1 : 0
-              }));
-            });
-            const { error: invError } = await supabase.from('branch_inventory').insert(inventoryPayload);
-            if (invError) console.error("Inventory Insert Error:", invError.message);
-          }
-        }
-
-        setImportSuccessCount(productsToInsert.length + productsToUpdate.length);
-        fetchProducts(); // Refresh ตาราง
+        setPendingFileData(data);
+        await processFileData(data, categories, units);
 
       } catch (err: any) {
         setImportErrors([`เกิดข้อผิดพลาดในการนำเข้า: ${err.message}`]);
-      } finally {
         setIsImporting(false);
+      } finally {
         e.target.value = ''; // Reset file input
       }
     };
     reader.readAsBinaryString(file);
   };
 
+  const processFileData = async (data: any[], currentCategories: any[], currentUnits: any[]) => {
+    const errors: string[] = [];
+    const productsToInsert: any[] = [];
+    const productsToUpdate: any[] = [];
+    const missingCats = new Set<string>();
+    const missingUnits = new Set<string>();
+
+    // 1. Data Parsing & Validation
+    for (let i = 0; i < data.length; i++) {
+      const row: any = data[i];
+      const rowNum = i + 2; // +2 เพราะ index เริ่ม 0 และมี Header ในแถวแรก
+
+      const id = row.ID ? String(row.ID).trim() : null;
+
+      if (!id && (!row.Name || String(row.Name).trim() === '')) {
+        errors.push(`แถวที่ ${rowNum}: ข้อมูล "ชื่อสินค้า" ห้ามว่าง (สำหรับการเพิ่มใหม่)`);
+        continue;
+      }
+      if (row.Price !== undefined && (isNaN(Number(row.Price)) || Number(row.Price) < 0)) {
+        errors.push(`แถวที่ ${rowNum}: "ราคา" ต้องเป็นตัวเลขที่มากกว่าหรือเท่ากับ 0`);
+        continue;
+      }
+
+      let category_id = undefined;
+      if (row.Category_Name) {
+        const catName = String(row.Category_Name).trim();
+        const cat = currentCategories.find(c => c.name === catName);
+        if (!cat) {
+          missingCats.add(catName);
+        } else {
+          category_id = cat.id;
+        }
+      }
+
+      let unit_id = undefined;
+      if (row.Unit_Name) {
+        const unitName = String(row.Unit_Name).trim();
+        const unit = currentUnits.find(u => u.name === unitName);
+        if (!unit) {
+          missingUnits.add(unitName);
+        } else {
+          unit_id = unit.id;
+        }
+      }
+      
+      const is_track_stock = row.Track_Stock ? String(row.Track_Stock).trim().toLowerCase() !== 'no' : true;
+
+      if (id) {
+        // โหมดอัปเดตข้อมูลเดิม (Upsert)
+        const existing = products.find(p => p.id === id);
+        if (!existing) {
+          errors.push(`แถวที่ ${rowNum}: ไม่พบสินค้ารหัส ${id} ในระบบ (ไม่สามารถอัปเดตได้)`);
+          continue;
+        }
+        productsToUpdate.push({
+          id: id,
+          name: row.Name !== undefined ? String(row.Name).trim() : existing.name,
+          description: row.Description !== undefined ? String(row.Description).trim() : existing.description,
+          price: row.Price !== undefined ? Number(row.Price) : existing.price,
+          image_url: row.Image_URL !== undefined ? String(row.Image_URL).trim() : existing.image_url,
+          category_id: category_id !== undefined ? category_id : existing.category_id,
+          unit_id: unit_id !== undefined ? unit_id : existing.unit_id,
+          is_track_stock: row.Track_Stock !== undefined ? is_track_stock : existing.is_track_stock
+        });
+      } else {
+        // โหมดเพิ่มข้อมูลใหม่ (Insert)
+        const initialStock = isNaN(Number(row.Initial_Stock_Per_Branch)) ? 0 : Number(row.Initial_Stock_Per_Branch);
+        productsToInsert.push({
+          name: String(row.Name).trim(),
+          description: row.Description ? String(row.Description).trim() : null,
+          price: Number(row.Price),
+          image_url: row.Image_URL ? String(row.Image_URL).trim() : null,
+          category_id: category_id || null,
+          unit_id: unit_id || null,
+          _initialStock: initialStock,
+          is_track_stock: is_track_stock
+        });
+      }
+    }
+
+    if (missingCats.size > 0 || missingUnits.size > 0) {
+      setMissingMasterData({
+        categories: Array.from(missingCats),
+        units: Array.from(missingUnits)
+      });
+      if (errors.length > 0) {
+        setImportErrors(errors);
+      }
+      setIsImporting(false);
+      return;
+    }
+
+    if (errors.length > 0) {
+      setImportErrors(errors);
+      setIsImporting(false);
+      return; // หากมี Error แม้แต่แถวเดียว จะยกเลิกการนำเข้าทั้งหมดเพื่อความปลอดภัย
+    }
+
+    if (productsToInsert.length === 0 && productsToUpdate.length === 0) {
+      setImportErrors(['ไม่พบข้อมูลสินค้าที่ถูกต้องในไฟล์']);
+      setIsImporting(false);
+      return;
+    }
+
+    try {
+      // 2. อัปเดตข้อมูลเดิม (Upsert) ถ้ามีการแก้ไขมาจากไฟล์ Export
+      if (productsToUpdate.length > 0) {
+        const { error: updateError } = await supabase.from('products').upsert(productsToUpdate);
+        if (updateError) throw updateError;
+      }
+
+      // 3. เพิ่มข้อมูลใหม่ (Insert) ถ้าในไฟล์ไม่มีระบุ ID
+      if (productsToInsert.length > 0) {
+        const insertPayload = productsToInsert.map(({ _initialStock, ...rest }) => rest);
+        const { data: insertedProducts, error: insertError } = await supabase
+          .from('products')
+          .insert(insertPayload)
+          .select('id');
+
+        if (insertError) throw insertError;
+
+        if (insertedProducts && branches.length > 0) {
+          const inventoryPayload = insertedProducts.flatMap((insertedProduct, index) => {
+            const initialStock = productsToInsert[index]._initialStock;
+            return branches.map(branch => ({
+              branch_id: branch.id,
+              product_id: insertedProduct.id,
+              stock_count: initialStock,
+              status: initialStock > 0 ? 1 : 0
+            }));
+          });
+          const { error: invError } = await supabase.from('branch_inventory').insert(inventoryPayload);
+          if (invError) console.error("Inventory Insert Error:", invError.message);
+        }
+      }
+
+      setImportSuccessCount(productsToInsert.length + productsToUpdate.length);
+      fetchProducts(); // Refresh ตาราง
+
+    } catch (err: any) {
+      setImportErrors([`เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${err.message}`]);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleAutoCreateMasterData = async () => {
+    if (!missingMasterData || !pendingFileData) return;
+    setIsImporting(true);
+
+    try {
+      // 1. Create missing categories
+      if (missingMasterData.categories.length > 0) {
+        const catPayload = missingMasterData.categories.map(name => ({
+          name: name,
+          sort_order: 99
+        }));
+        const { error: catError } = await supabase.from('categories').insert(catPayload);
+        if (catError) throw catError;
+      }
+
+      // 2. Create missing units
+      if (missingMasterData.units.length > 0) {
+        const unitPayload = missingMasterData.units.map(name => ({
+          name: name,
+          step_value: 1,
+          min_value: 1
+        }));
+        const { error: unitError } = await supabase.from('product_units').insert(unitPayload);
+        if (unitError) throw unitError;
+      }
+
+      // 3. Re-fetch master data
+      const { data: newCatData } = await supabase.from('categories').select('id, name, parent_id').order('sort_order', { ascending: true });
+      if (newCatData) setCategories(newCatData);
+      
+      const { data: newUnitData } = await supabase.from('product_units').select('id, name').order('name');
+      if (newUnitData) setUnits(newUnitData);
+
+      setMissingMasterData(null);
+      
+      // 4. Proceed with processing the file or show remaining errors
+      if (importErrors.length > 0) {
+        setIsImporting(false);
+        alert('สร้าง Master Data สำเร็จ กรุณาแก้ไขข้อผิดพลาดอื่นๆ ในไฟล์และอัปโหลดใหม่อีกครั้ง');
+      } else {
+        await processFileData(pendingFileData, newCatData || categories, newUnitData || units);
+      }
+
+    } catch (error: any) {
+      setImportErrors([`เกิดข้อผิดพลาดในการสร้างข้อมูล Master Data: ${error.message}`]);
+      setIsImporting(false);
+    }
+  };
+
   const closeImportModal = () => {
     setIsImportModalOpen(false);
     setImportErrors([]);
     setImportSuccessCount(0);
+    setMissingMasterData(null);
+    setPendingFileData(null);
   };
 
   const filteredProducts = selectedCategory
@@ -764,8 +847,42 @@ export default function SuperAdminProductsPage() {
                 </div>
               )}
 
+              {/* Feedback UI: Missing Master Data Prompt */}
+              {missingMasterData && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 text-amber-700 font-semibold mb-2"><AlertCircle className="w-5 h-5" /> พบข้อมูล Master Data ที่ไม่มีในระบบ</div>
+                  <p className="text-sm text-amber-600 mb-3">คุณต้องการสร้างข้อมูลเหล่านี้อัตโนมัติ{importErrors.length === 0 ? 'และดำเนินการนำเข้าต่อ' : ''}หรือไม่?</p>
+                  
+                  <div className="flex flex-col gap-2 mb-4 text-sm text-amber-700">
+                    {missingMasterData.categories.length > 0 && (
+                      <div><strong>หมวดหมู่ที่ขาด:</strong> {missingMasterData.categories.join(', ')}</div>
+                    )}
+                    {missingMasterData.units.length > 0 && (
+                      <div><strong>หน่วยนับที่ขาด:</strong> {missingMasterData.units.join(', ')}</div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={handleAutoCreateMasterData}
+                      disabled={isImporting}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {isImporting ? 'กำลังสร้าง...' : (importErrors.length === 0 ? 'สร้างข้อมูลอัตโนมัติและนำเข้าต่อ' : 'สร้างข้อมูลอัตโนมัติ')}
+                    </button>
+                    <button 
+                      onClick={() => setMissingMasterData(null)}
+                      disabled={isImporting}
+                      className="px-4 py-2 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Upload Zone */}
-              {importSuccessCount === 0 && (
+              {importSuccessCount === 0 && !missingMasterData && (
                 <label className={`flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${isImporting ? 'bg-gray-50 border-gray-300' : 'bg-gray-50 border-gray-300 hover:bg-gray-100 hover:border-emerald-400 group'}`}>
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     {isImporting ? <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-3" /> : <UploadCloud className="w-12 h-12 text-gray-400 group-hover:text-emerald-500 transition-colors mb-3" />}

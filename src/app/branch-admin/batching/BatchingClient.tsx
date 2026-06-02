@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 // โหลด Map แบบปิด SSR
 const InteractiveBatchMap = dynamic(
@@ -77,27 +78,32 @@ export default function BatchingClient({ orders, branchId, branchLocation }: Bat
 
       if (updateError) throw new Error(updateError.message);
 
+      let optimizationError = null;
       // 4. เรียกใช้ API เพื่อคำนวณและจัดลำดับเส้นทาง (Route Optimization)
       try {
         const optimizeRes = await fetch('/api/optimize-route', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ batch_id: batchData.id })
+          body: JSON.stringify({ batchId: batchData.id })
         });
         const optimizeData = await optimizeRes.json();
         if (!optimizeRes.ok) throw new Error(optimizeData.error || 'คำนวณเส้นทางล้มเหลว');
       } catch (optError: any) {
         console.error('Optimization warning:', optError);
-        alert('สร้างรอบจัดส่งสำเร็จแล้ว แต่มีปัญหาในการคำนวณเส้นทางอัตโนมัติ: ' + optError.message);
+        optimizationError = optError.message;
       }
 
-      alert('สร้างรอบการจัดส่งและจัดเรียงเส้นทางสำเร็จ!');
+      if (optimizationError) {
+        toast.success(`สร้างรอบจัดส่งสำเร็จ แต่การคำนวณเส้นทางอัตโนมัติล้มเหลว: ${optimizationError}`, { duration: 5000 });
+      } else {
+        toast.success('สร้างรอบการจัดส่งและจัดเรียงเส้นทางสำเร็จ!');
+      }
       setSelectedIds([]); // เคลียร์รายการที่เลือก
       router.refresh();   // ดึงข้อมูลใหม่จาก Server
 
     } catch (error: any) {
       console.error('Error creating batch:', error);
-      alert('เกิดข้อผิดพลาด: ' + error.message);
+      toast.error('เกิดข้อผิดพลาด: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }

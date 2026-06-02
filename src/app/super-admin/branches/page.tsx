@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Plus, Edit2, Trash2, MapPin, Phone, Building2, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, MapPin, Phone, Building2, X, AlertCircle } from 'lucide-react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import toast from 'react-hot-toast';
 
 type Branch = {
   id: string;
@@ -28,6 +30,8 @@ export default function SuperAdminBranchesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [branchToDelete, setBranchToDelete] = useState<Branch | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -56,13 +60,14 @@ export default function SuperAdminBranchesPage() {
       setBranches(data || []);
     } catch (error: any) {
       console.error('Error fetching branches:', error.message);
-      alert('ไม่สามารถดึงข้อมูลสาขาได้');
+      toast.error('ไม่สามารถดึงข้อมูลสาขาได้');
     } finally {
       setLoading(false);
     }
   };
 
   const openModal = (branch?: Branch) => {
+    setModalError(null);
     if (branch) {
       setEditingId(branch.id);
       setFormData({
@@ -83,12 +88,14 @@ export default function SuperAdminBranchesPage() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
+    setModalError(null);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-
+    setModalError(null);
+    
     try {
       const payload = {
         name: formData.name,
@@ -106,44 +113,47 @@ export default function SuperAdminBranchesPage() {
           .update(payload)
           .eq('id', editingId);
         if (error) throw error;
-        alert('อัปเดตข้อมูลสาขาสำเร็จ');
+        toast.success('อัปเดตข้อมูลสาขาสำเร็จ');
       } else {
         // Insert
         const { error } = await supabase
           .from('branches')
           .insert([payload]);
         if (error) throw error;
-        alert('เพิ่มสาขาใหม่สำเร็จ');
+        toast.success('เพิ่มสาขาใหม่สำเร็จ');
       }
 
       closeModal();
       fetchBranches();
     } catch (error: any) {
       console.error('Error saving branch:', error.message);
-      alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      setModalError(`เกิดข้อผิดพลาด: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบสาขา "${name}" ?\nข้อมูลออเดอร์และสต็อกที่ผูกกับสาขานี้อาจได้รับผลกระทบ`)) {
-      return;
-    }
+  const handleDeleteRequest = (branch: Branch) => {
+    setBranchToDelete(branch);
+  };
 
+  const handleDelete = async () => {
+    if (!branchToDelete) return;
     try {
       const { error } = await supabase
         .from('branches')
         .delete()
-        .eq('id', id);
+        .eq('id', branchToDelete.id);
         
       if (error) throw error;
       
-      alert('ลบสาขาสำเร็จ');
-      setBranches(branches.filter(b => b.id !== id));
+      toast.success('ลบสาขาสำเร็จ');
+      setBranches(branches.filter(b => b.id !== branchToDelete.id));
     } catch (error: any) {
       console.error('Error deleting branch:', error.message);
-      alert(`ไม่สามารถลบสาขาได้: ${error.message}`);
+      toast.error(`ไม่สามารถลบสาขาได้: ${error.message}`);
+    } finally {
+      setBranchToDelete(null);
     }
   };
 
@@ -186,7 +196,7 @@ export default function SuperAdminBranchesPage() {
                   <button onClick={() => openModal(branch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสาขา">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(branch.id, branch.name)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบสาขา">
+                  <button onClick={() => handleDeleteRequest(branch)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบสาขา">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -212,6 +222,18 @@ export default function SuperAdminBranchesPage() {
         </div>
       )}
 
+      {branchToDelete && (
+        <ConfirmModal
+          isOpen={!!branchToDelete}
+          title="ยืนยันการลบสาขา"
+          message={`คุณแน่ใจหรือไม่ว่าต้องการลบสาขา "${branchToDelete.name}"?\nข้อมูลออเดอร์และสต็อกที่ผูกกับสาขานี้อาจได้รับผลกระทบ`}
+          onConfirm={handleDelete}
+          onCancel={() => setBranchToDelete(null)}
+          confirmText="ลบ"
+          isDestructive
+        />
+      )}
+
       {/* Modal Form */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -226,6 +248,12 @@ export default function SuperAdminBranchesPage() {
             </div>
             
             <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-grow flex flex-col gap-4">
+              {modalError && (
+                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  <span>{modalError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อสาขา <span className="text-red-500">*</span></label>
                 <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="เช่น สาขาเชียงใหม่" />

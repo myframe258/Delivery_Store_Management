@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Plus, Edit2, Trash2, X, AlertCircle, LayoutGrid } from 'lucide-react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import toast from 'react-hot-toast';
 
 interface Category {
   id: string;
@@ -19,6 +21,7 @@ export default function CategoriesManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({ name: '', parent_id: '', sort_order: 0 });
@@ -105,6 +108,7 @@ export default function CategoriesManagementPage() {
         if (error) throw error;
       }
       
+      toast.success(isEditMode ? 'อัปเดตข้อมูลหมวดหมู่สำเร็จ' : 'เพิ่มหมวดหมู่ใหม่สำเร็จ');
       await fetchCategories();
       closeModal();
     } catch (err: any) {
@@ -118,8 +122,13 @@ export default function CategoriesManagementPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`คุณต้องการลบหมวดหมู่ "${name}" ใช่หรือไม่?`)) return;
+  const handleDeleteRequest = (category: Category) => {
+    setCategoryToDelete(category);
+  };
+
+  const handleDelete = async () => {
+    if (!categoryToDelete) return;
+    const { id, name } = categoryToDelete;
 
     try {
       // 1. เช็คว่ามีหมวดหมู่ย่อยซ้อนอยู่หรือไม่
@@ -131,7 +140,8 @@ export default function CategoriesManagementPage() {
       if (childError) throw childError;
 
       if (childCount && childCount > 0) {
-        alert(`ไม่สามารถลบได้ เนื่องจากมีหมวดหมู่ย่อยอยู่ภายใต้นี้ ${childCount} รายการ\nกรุณาย้ายหรือลบหมวดหมู่ย่อยออกก่อน`);
+        toast.error(`ไม่สามารถลบได้ เนื่องจากมีหมวดหมู่ย่อยอยู่ภายใต้นี้ ${childCount} รายการ\nกรุณาย้ายหรือลบหมวดหมู่ย่อยออกก่อน`, { duration: 4000 });
+        setCategoryToDelete(null);
         return;
       }
 
@@ -144,7 +154,8 @@ export default function CategoriesManagementPage() {
       if (prodError) throw prodError;
 
       if (prodCount && prodCount > 0) {
-        alert(`ไม่สามารถลบได้ เนื่องจากมีสินค้าผูกกับหมวดหมู่นี้ ${prodCount} รายการ\nกรุณาเปลี่ยนหมวดหมู่ของสินค้าเหล่านั้นก่อนทำการลบ`);
+        toast.error(`ไม่สามารถลบได้ เนื่องจากมีสินค้าผูกกับหมวดหมู่นี้ ${prodCount} รายการ\nกรุณาเปลี่ยนหมวดหมู่ของสินค้าเหล่านั้นก่อนทำการลบ`, { duration: 4000 });
+        setCategoryToDelete(null);
         return;
       }
 
@@ -152,10 +163,13 @@ export default function CategoriesManagementPage() {
       const { error } = await supabase.from('categories').delete().eq('id', id);
       if (error) throw error;
 
+      toast.success(`ลบหมวดหมู่ "${name}" สำเร็จ`);
       await fetchCategories();
     } catch (err: any) {
       console.error('Error deleting category:', err);
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล: ' + err.message);
+      toast.error('เกิดข้อผิดพลาดในการลบข้อมูล: ' + err.message);
+    } finally {
+      setCategoryToDelete(null);
     }
   };
 
@@ -215,7 +229,7 @@ export default function CategoriesManagementPage() {
                             <button onClick={() => openModal(rootCat)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="แก้ไข">
                               <Edit2 className="w-4 h-4" />
                             </button>
-                            <button onClick={() => handleDelete(rootCat.id, rootCat.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
+                            <button onClick={() => handleDeleteRequest(rootCat)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -234,7 +248,7 @@ export default function CategoriesManagementPage() {
                               <button onClick={() => openModal(childCat)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="แก้ไข">
                                 <Edit2 className="w-4 h-4" />
                               </button>
-                              <button onClick={() => handleDelete(childCat.id, childCat.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
+                              <button onClick={() => handleDeleteRequest(childCat)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
@@ -248,6 +262,18 @@ export default function CategoriesManagementPage() {
             </table>
           </div>
         </div>
+
+        {categoryToDelete && (
+          <ConfirmModal
+            isOpen={!!categoryToDelete}
+            title="ยืนยันการลบหมวดหมู่"
+            message={`คุณต้องการลบหมวดหมู่ "${categoryToDelete.name}" ใช่หรือไม่?`}
+            onConfirm={handleDelete}
+            onCancel={() => setCategoryToDelete(null)}
+            confirmText="ลบ"
+            isDestructive
+          />
+        )}
 
         {/* Modal */}
         {isModalOpen && (

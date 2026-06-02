@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Users, Edit2, Shield, Store, X, UserPlus } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 type Branch = {
   id: string;
@@ -75,7 +76,7 @@ export default function SuperAdminUsersPage() {
       setBranches(branchesData || []);
     } catch (error: any) {
       console.error('Error fetching data:', error.message);
-      alert('ไม่สามารถดึงข้อมูลผู้ใช้งานได้');
+      toast.error('ไม่สามารถดึงข้อมูลผู้ใช้งานได้');
     } finally {
       setLoading(false);
     }
@@ -119,7 +120,7 @@ export default function SuperAdminUsersPage() {
       const finalBranchId = isBranchRequired && formData.branch_id ? formData.branch_id : null;
 
       if (isBranchRequired && !finalBranchId) {
-        alert('กรุณาระบุสาขาต้นสังกัดสำหรับ Branch Admin หรือ Rider');
+        toast.error('กรุณาระบุสาขาต้นสังกัดสำหรับ Branch Admin หรือ Rider');
         setIsSaving(false);
         return;
       }
@@ -138,7 +139,7 @@ export default function SuperAdminUsersPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'ไม่สามารถสร้างผู้ใช้งานได้');
-        alert('สร้างผู้ใช้งานใหม่สำเร็จ');
+        toast.success('สร้างผู้ใช้งานใหม่สำเร็จ');
 
       } else if (modalMode === 'edit' && editingUser) {
         // อัปเดตข้อมูลผู้ใช้งานเดิม
@@ -151,14 +152,14 @@ export default function SuperAdminUsersPage() {
           .eq('id', editingUser.id);
       
         if (error) throw error;
-        alert('อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ');
+        toast.success('อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ');
       }
 
       closeModal();
       fetchData(); // โหลดข้อมูลใหม่
     } catch (error: any) {
       console.error('Error updating user:', error.message);
-      alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      toast.error(`เกิดข้อผิดพลาด: ${error.message}`);
     } finally {
       setIsSaving(false);
     }

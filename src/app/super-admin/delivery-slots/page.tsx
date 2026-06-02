@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Clock, Plus, Edit, Trash2, CheckCircle2, XCircle, AlertCircle, Save, X } from 'lucide-react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 type DeliverySlot = {
   id: string;
@@ -20,6 +21,8 @@ export default function DeliverySlotsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [slotToDelete, setSlotToDelete] = useState<DeliverySlot | null>(null);
 
   // State สำหรับฟอร์ม
   const [formData, setFormData] = useState({
@@ -62,6 +65,7 @@ export default function DeliverySlotsPage() {
   // เปิด Modal เพื่อเพิ่มข้อมูลใหม่
   const handleAddNew = () => {
     setEditingId(null);
+    setModalError(null);
     setFormData({
       name: '',
       time_range: '',
@@ -76,6 +80,7 @@ export default function DeliverySlotsPage() {
   // เปิด Modal เพื่อแก้ไขข้อมูลเดิม
   const handleEdit = (slot: DeliverySlot) => {
     setEditingId(slot.id);
+    setModalError(null);
     setFormData({
       name: slot.name,
       time_range: slot.time_range,
@@ -87,10 +92,17 @@ export default function DeliverySlotsPage() {
     setIsModalOpen(true);
   };
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setModalError(null);
+  };
+
   // บันทึกข้อมูล (แยก Insert กับ Update)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setModalError(null);
     try {
       if (editingId) {
         // Update
@@ -109,25 +121,31 @@ export default function DeliverySlotsPage() {
         alert('เพิ่มรอบจัดส่งใหม่สำเร็จ');
       }
       
-      setIsModalOpen(false);
+      closeModal();
       fetchSlots();
     } catch (error: any) {
-      alert('เกิดข้อผิดพลาด: ' + error.message);
+      setModalError('เกิดข้อผิดพลาด: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
+  const handleDeleteRequest = (slot: DeliverySlot) => {
+    setSlotToDelete(slot);
+  };
+
   // ลบข้อมูล
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${name}"?\n(หากมีออเดอร์ที่ใช้รอบนี้ไปแล้ว อาจทำให้การแสดงผลผิดพลาด แนะนำให้ใช้วิธี 'ปิดใช้งาน' แทน)`)) return;
-    
+  const handleDelete = async () => {
+    if (!slotToDelete) return;
     try {
-      const { error } = await supabase.from('delivery_slots').delete().eq('id', id);
+      const { error } = await supabase.from('delivery_slots').delete().eq('id', slotToDelete.id);
       if (error) throw error;
+      alert('ลบข้อมูลสำเร็จ');
       fetchSlots();
     } catch (error: any) {
       alert('ลบข้อมูลไม่สำเร็จ: ' + error.message);
+    } finally {
+      setSlotToDelete(null);
     }
   };
 
@@ -217,7 +235,7 @@ export default function DeliverySlotsPage() {
                         <button onClick={() => handleEdit(slot)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="แก้ไข">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(slot.id, slot.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
+                        <button onClick={() => handleDeleteRequest(slot)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -230,6 +248,18 @@ export default function DeliverySlotsPage() {
         </div>
       </div>
 
+      {slotToDelete && (
+        <ConfirmModal
+          isOpen={!!slotToDelete}
+          title="ยืนยันการลบรอบจัดส่ง"
+          message={`คุณแน่ใจหรือไม่ว่าต้องการลบ "${slotToDelete.name}"?\n(หากมีออเดอร์ที่ใช้รอบนี้ไปแล้ว อาจทำให้การแสดงผลผิดพลาด แนะนำให้ใช้วิธี 'ปิดใช้งาน' แทน)`}
+          onConfirm={handleDelete}
+          onCancel={() => setSlotToDelete(null)}
+          confirmText="ลบ"
+          isDestructive
+        />
+      )}
+
       {/* Modal Form */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
@@ -237,7 +267,7 @@ export default function DeliverySlotsPage() {
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h2 className="text-xl font-bold text-gray-800">{editingId ? 'แก้ไขรอบจัดส่ง' : 'เพิ่มรอบจัดส่งใหม่'}</h2>
               <button 
-                onClick={() => setIsModalOpen(false)} 
+                onClick={closeModal} 
                 className="text-gray-400 hover:text-gray-600 transition"
                 title="ปิดหน้าต่าง"
               >
@@ -246,6 +276,12 @@ export default function DeliverySlotsPage() {
             </div>
             
             <form onSubmit={handleSave} className="p-6 space-y-5">
+              {modalError && (
+                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  <span>{modalError}</span>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อรอบจัดส่ง <span className="text-red-500">*</span></label>
                 <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น รอบเช้า, รอบดึก" />
@@ -287,7 +323,7 @@ export default function DeliverySlotsPage() {
               </div>
 
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition">ยกเลิก</button>
+                <button type="button" onClick={closeModal} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition">ยกเลิก</button>
                 <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition flex items-center gap-2 disabled:bg-blue-400">
                   <Save className="w-4 h-4" /> {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
                 </button>

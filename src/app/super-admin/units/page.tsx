@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Plus, Edit2, Trash2, X, AlertCircle, Info, Scale } from 'lucide-react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import toast from 'react-hot-toast';
 
 interface Unit {
   id: string;
@@ -19,6 +21,7 @@ export default function UnitsManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentUnitId, setCurrentUnitId] = useState<string | null>(null);
+  const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({ name: '', step_value: 1, min_value: 1 });
@@ -87,6 +90,7 @@ export default function UnitsManagementPage() {
         if (error) throw error;
       }
       
+      toast.success(isEditMode ? 'อัปเดตหน่วยนับสำเร็จ' : 'เพิ่มหน่วยนับสำเร็จ');
       await fetchUnits();
       closeModal();
     } catch (err: any) {
@@ -101,8 +105,13 @@ export default function UnitsManagementPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`คุณต้องการลบหน่วยนับ "${name}" ใช่หรือไม่?`)) return;
+  const handleDeleteRequest = (unit: Unit) => {
+    setUnitToDelete(unit);
+  };
+
+  const handleDelete = async () => {
+    if (!unitToDelete) return;
+    const { id, name } = unitToDelete;
 
     try {
       // 1. ตรวจสอบว่ามีสินค้าใช้งานหน่วยนี้อยู่หรือไม่ (Pre-check)
@@ -114,7 +123,8 @@ export default function UnitsManagementPage() {
       if (countError) throw countError;
 
       if (count && count > 0) {
-        alert(`ไม่สามารถลบได้ เนื่องจากมีสินค้าใช้งานหน่วยนับนี้อยู่จำนวน ${count} รายการ\nกรุณาเปลี่ยนหน่วยนับของสินค้าเหล่านั้นก่อนทำการลบ`);
+        toast.error(`ไม่สามารถลบได้ เนื่องจากมีสินค้าใช้งานหน่วยนับนี้อยู่จำนวน ${count} รายการ\nกรุณาเปลี่ยนหน่วยนับของสินค้าเหล่านั้นก่อนทำการลบ`, { duration: 4000 });
+        setUnitToDelete(null);
         return;
       }
 
@@ -122,10 +132,13 @@ export default function UnitsManagementPage() {
       const { error } = await supabase.from('product_units').delete().eq('id', id);
       if (error) throw error;
 
+      toast.success(`ลบหน่วยนับ "${name}" สำเร็จ`);
       await fetchUnits();
     } catch (err: any) {
       console.error('Error deleting unit:', err);
-      alert('เกิดข้อผิดพลาดในการลบข้อมูล: ' + err.message);
+      toast.error('เกิดข้อผิดพลาดในการลบข้อมูล: ' + err.message);
+    } finally {
+      setUnitToDelete(null);
     }
   };
 
@@ -182,7 +195,7 @@ export default function UnitsManagementPage() {
                           <button onClick={() => openModal(unit)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="แก้ไข">
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleDelete(unit.id, unit.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
+                          <button onClick={() => handleDeleteRequest(unit)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบ">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -194,6 +207,18 @@ export default function UnitsManagementPage() {
             </table>
           </div>
         </div>
+
+        {unitToDelete && (
+          <ConfirmModal
+            isOpen={!!unitToDelete}
+            title="ยืนยันการลบหน่วยนับ"
+            message={`คุณต้องการลบหน่วยนับ "${unitToDelete.name}" ใช่หรือไม่?`}
+            onConfirm={handleDelete}
+            onCancel={() => setUnitToDelete(null)}
+            confirmText="ลบ"
+            isDestructive
+          />
+        )}
 
         {/* Modal */}
         {isModalOpen && (

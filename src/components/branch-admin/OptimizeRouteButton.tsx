@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { optimizeBatchRoute, OptimizeRoutePayload } from '@/lib/api/optimizeRoute';
+import toast from 'react-hot-toast';
 
 interface OptimizeRouteButtonProps {
   payload: OptimizeRoutePayload;
@@ -21,7 +22,7 @@ export default function OptimizeRouteButton({ payload, onSuccess }: OptimizeRout
       const result = await optimizeBatchRoute(payload);
       
       if (result.success) {
-        alert('จัดเรียงเส้นทางสำเร็จ!');
+        toast.success('จัดเรียงเส้นทางสำเร็จ!');
         if (onSuccess) {
           // ส่งข้อมูลกลับไปให้ Component แม่ เพื่ออัปเดต UI (เช่น ลำดับคิว)
           onSuccess(result.optimizedOrders);
@@ -31,7 +32,6 @@ export default function OptimizeRouteButton({ payload, onSuccess }: OptimizeRout
       console.error(err);
       const errorMessage = err.message || 'เกิดข้อผิดพลาดในการจัดเรียงเส้นทาง';
       setError(errorMessage);
-      alert('Error: ' + errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -15,6 +15,7 @@ interface InventoryItem {
   stock_count: number;
   status: number;
   discount_price?: number | null;
+  discount_end_date?: string | null;
   is_track_stock?: boolean;
   category_id?: string | null;
   category_name?: string;
@@ -37,6 +38,7 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
   const [editingProduct, setEditingProduct] = useState<InventoryItem | null>(null);
   const [editStockValue, setEditStockValue] = useState<number | ''>('');
   const [editDiscountValue, setEditDiscountValue] = useState<number | ''>('');
+  const [editDiscountDate, setEditDiscountDate] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
 
   const supabase = createBrowserClient(
@@ -91,6 +93,7 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
     // ถ้าผู้ใช้กดบันทึกทั้งๆ ที่ช่องว่างเปล่า ให้ถือว่าเป็น 0
     const finalStockValue = editStockValue === '' ? 0 : editStockValue;
     const finalDiscountValue = editDiscountValue === '' ? null : editDiscountValue;
+    const finalDiscountDate = editDiscountDate === '' ? null : editDiscountDate;
 
     try {
       const { data: existing } = await supabase
@@ -103,7 +106,7 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
       if (existing) {
         const { error } = await supabase
           .from('branch_inventory')
-          .update({ stock_count: finalStockValue, discount_price: finalDiscountValue })
+          .update({ stock_count: finalStockValue, discount_price: finalDiscountValue, discount_end_date: finalDiscountDate })
           .eq('id', existing.id);
         if (error) throw error;
       } else {
@@ -114,13 +117,14 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
             product_id: productId,
             stock_count: finalStockValue,
             discount_price: finalDiscountValue,
+            discount_end_date: finalDiscountDate,
             status: currentStatus
           });
         if (error) throw error;
       }
 
       // อัปเดต UI เมื่อสำเร็จ
-      setInventory((prev) => prev.map(item => item.product_id === productId ? { ...item, stock_count: finalStockValue, discount_price: finalDiscountValue } : item));
+      setInventory((prev) => prev.map(item => item.product_id === productId ? { ...item, stock_count: finalStockValue, discount_price: finalDiscountValue, discount_end_date: finalDiscountDate } : item));
       setEditingProduct(null);
       toast.success('อัปเดตจำนวนสต็อกเรียบร้อยแล้ว');
     } catch (error: any) {
@@ -276,7 +280,7 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
                   </div>
                   <span className="text-xs font-medium text-gray-500">{isActive ? 'เปิดขาย' : 'ปิดการขาย'}</span>
                 </label>
-                <button onClick={() => { setEditingProduct(item); setEditStockValue(item.stock_count); setEditDiscountValue(item.discount_price ?? ''); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition">
+                <button onClick={() => { setEditingProduct(item); setEditStockValue(item.stock_count); setEditDiscountValue(item.discount_price ?? ''); setEditDiscountDate(item.discount_end_date ?? ''); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition">
                   <Edit2 className="w-4 h-4" /> จัดการ
                 </button>
               </div>
@@ -363,6 +367,18 @@ export default function InventoryClient({ initialInventory, branch }: InventoryC
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-2">ราคาปกติ: ฿{editingProduct.price.toLocaleString()}</p>
+                <div className="mt-3">
+                  <label htmlFor="discount-date-input" className="block text-sm font-medium text-gray-700 mb-1">สิ้นสุดโปรโมชั่น</label>
+                  <input 
+                    id="discount-date-input"
+                    type="datetime-local" 
+                    title="ระบุวันเวลาที่สิ้นสุดโปรโมชั่น"
+                    placeholder="วันเวลาที่สิ้นสุด"
+                    value={editDiscountDate ? new Date(new Date(editDiscountDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''}
+                    onChange={(e) => setEditDiscountDate(e.target.value ? new Date(e.target.value).toISOString() : '')} 
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  />
+                </div>
               </div>
             </div>
             <div className="p-5 bg-gray-50 flex justify-end gap-3">

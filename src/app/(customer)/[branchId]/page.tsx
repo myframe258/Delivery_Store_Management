@@ -26,6 +26,7 @@ type InventoryRecord = {
   stock_count: number;
   status: number;
   discount_price?: number | null;
+  discount_end_date?: string | null;
   products: ProductRecord | ProductRecord[] | null;
 };
 
@@ -56,6 +57,7 @@ export default async function BranchStorefrontPage({
       stock_count,
       status,
       discount_price,
+      discount_end_date,
       products!inner (
         id,
         name,
@@ -94,6 +96,9 @@ export default async function BranchStorefrontPage({
     if (!prod) return null;
     
     const unit = Array.isArray(prod.product_units) ? prod.product_units[0] : prod.product_units;
+    
+    // ตรวจสอบว่าโปรโมชั่นหมดเวลาหรือยัง (ถ้าหมดแล้วให้ยกเลิกราคาลด)
+    const isExpired = item.discount_end_date && new Date(item.discount_end_date).getTime() < new Date().getTime();
 
     return {
       id: prod.id,
@@ -103,7 +108,8 @@ export default async function BranchStorefrontPage({
       image_url: prod.image_url,
       category_id: prod.category_id || null,
       stock_count: item.stock_count,
-      discount_price: item.discount_price || null,
+      discount_price: isExpired ? null : (item.discount_price || null),
+      discount_end_date: isExpired ? null : (item.discount_end_date || null),
       is_track_stock: prod.is_track_stock !== false,
       unit_name: unit?.name,
       step_value: unit?.step_value ? Number(unit.step_value) : undefined,

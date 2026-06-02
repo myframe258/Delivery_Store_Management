@@ -15,6 +15,7 @@ interface Product {
   category_id: string | null;
   stock_count: number;
   discount_price?: number | null;
+  discount_end_date?: string | null;
   is_track_stock?: boolean;
   unit_name?: string;
   step_value?: number;
@@ -50,6 +51,8 @@ export default function StorefrontClient({ products, categories, branchId, promo
   const [prevItemCount, setPrevItemCount] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
+  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
+  const [hasActiveTimer, setHasActiveTimer] = useState(false);
 
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
   const cartItems = useCartStore((state) => state.items || []);
@@ -132,6 +135,48 @@ export default function StorefrontClient({ products, categories, branchId, promo
     return () => clearInterval(timer);
   }, [promotions]);
 
+  // กรองเฉพาะสินค้าที่ลดราคา (Flash Sale) และจัดเรียงให้สินค้าหมดไปอยู่ท้ายสุด
+  const discountedProducts = useMemo(() => {
+    const discounted = products.filter(p => p.discount_price != null);
+    return discounted.sort((a, b) => {
+      const aOut = a.is_track_stock !== false && a.stock_count <= 0;
+      const bOut = b.is_track_stock !== false && b.stock_count <= 0;
+      if (aOut === bOut) return 0;
+      return aOut ? 1 : -1;
+    });
+  }, [products]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      
+      // หาเวลา discount_end_date ที่ใกล้ที่สุดจากสินค้าที่ลดราคา
+      const validEndDates = discountedProducts
+        .map(p => p.discount_end_date ? new Date(p.discount_end_date).getTime() : 0)
+        .filter(time => time > now.getTime());
+
+      if (validEndDates.length > 0) {
+        const targetTime = Math.min(...validEndDates);
+        const difference = targetTime - now.getTime();
+        
+        setHasActiveTimer(true);
+        setTimeLeft({
+          hours: Math.floor(difference / (1000 * 60 * 60)), // ชั่วโมง (อาจเกิน 24 ได้)
+          minutes: Math.floor((difference / 1000 / 60) % 60),
+          seconds: Math.floor((difference / 1000) % 60),
+        });
+      } else {
+        setHasActiveTimer(false);
+      }
+    };
+
+    calculateTimeLeft(); // คำนวณครั้งแรก
+    const timer = setInterval(calculateTimeLeft, 1000); // อัปเดตทุก 1 วินาที
+    return () => clearInterval(timer);
+  }, [isMounted, discountedProducts]);
+
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // กรองสินค้าแบบเรียลไทม์
@@ -167,17 +212,6 @@ export default function StorefrontClient({ products, categories, branchId, promo
   const handleLoadMore = () => {
     setVisibleCount((prev) => prev + 20);
   };
-
-  // กรองเฉพาะสินค้าที่ลดราคา (Flash Sale) และจัดเรียงให้สินค้าหมดไปอยู่ท้ายสุด
-  const discountedProducts = useMemo(() => {
-    const discounted = products.filter(p => p.discount_price != null);
-    return discounted.sort((a, b) => {
-      const aOut = a.is_track_stock !== false && a.stock_count <= 0;
-      const bOut = b.is_track_stock !== false && b.stock_count <= 0;
-      if (aOut === bOut) return 0;
-      return aOut ? 1 : -1;
-    });
-  }, [products]);
 
   // Component Card ย่อยสำหรับแสดงการ์ดสินค้า (นำไปใช้ซ้ำได้ทั้งแนวตั้งและแนวนอน)
   const renderProductCard = (product: Product, isHorizontal: boolean = false) => {
@@ -293,10 +327,22 @@ export default function StorefrontClient({ products, categories, branchId, promo
       {/* --- Flash Sale Section --- */}
       {discountedProducts.length > 0 && (
         <section className="w-full bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-4 sm:p-6 border border-red-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
             <h2 className="text-lg sm:text-xl font-bold text-red-700 flex items-center gap-2">
               <span className="animate-bounce">🔥</span> สินค้าโปรโมชัน (Flash Sale)
             </h2>
+            {isMounted && hasActiveTimer && (
+              <div className="flex items-center gap-2 text-sm font-medium text-red-800 bg-red-100/80 px-3 py-1.5 rounded-lg w-fit border border-red-200/50">
+                <span>จบลงใน:</span>
+                <div className="flex items-center gap-1 font-bold">
+                  <span className="bg-red-600 text-white w-6 h-6 flex items-center justify-center rounded text-xs shadow-sm">{String(timeLeft.hours).padStart(2, '0')}</span>
+                  <span className="text-red-600 animate-pulse">:</span>
+                  <span className="bg-red-600 text-white w-6 h-6 flex items-center justify-center rounded text-xs shadow-sm">{String(timeLeft.minutes).padStart(2, '0')}</span>
+                  <span className="text-red-600 animate-pulse">:</span>
+                  <span className="bg-red-600 text-white w-6 h-6 flex items-center justify-center rounded text-xs shadow-sm">{String(timeLeft.seconds).padStart(2, '0')}</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex overflow-x-auto gap-3 sm:gap-4 pb-2 snap-x [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:bg-red-200 [&::-webkit-scrollbar-thumb]:rounded-full">
             {discountedProducts.map((product) => renderProductCard(product, true))}

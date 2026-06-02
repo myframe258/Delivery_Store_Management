@@ -40,7 +40,7 @@ export default async function BranchInventoryPage() {
   // 5. ดึงสต็อกสินค้าเฉพาะของสาขานี้
   const { data: inventoryData } = await supabase
     .from('branch_inventory')
-    .select('product_id, stock_count, status, discount_price')
+    .select('product_id, stock_count, status, discount_price, discount_end_date')
     .eq('branch_id', branchId);
 
   // 6. แปลงและรวมข้อมูลให้ฝั่ง Client ใช้งานได้สะดวก
@@ -56,6 +56,7 @@ export default async function BranchInventoryPage() {
       stock_count: inv?.stock_count || 0,
       status: inv?.status || 0, // 1 = เปิดขาย, 0 = ปิดขาย
       discount_price: inv?.discount_price || null,
+      discount_end_date: inv?.discount_end_date || null,
       is_track_stock: product.is_track_stock !== false,
       category_id: product.category_id,
       category_name: category?.name || 'ไม่มีหมวดหมู่'

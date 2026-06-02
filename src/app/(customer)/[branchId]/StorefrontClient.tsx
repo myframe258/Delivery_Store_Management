@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue, useRef } from 'react';
 import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart, Plus, Minus, X } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -51,8 +51,13 @@ export default function StorefrontClient({ products, categories, branchId, promo
   const [prevItemCount, setPrevItemCount] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
-  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
-  const [hasActiveTimer, setHasActiveTimer] = useState(false);
+  const [timeLefts, setTimeLefts] = useState<Record<string, { hours: number, minutes: number, seconds: number }>>({});
+
+  // สำหรับระบบเลื่อน (Drag to scroll) ใน Flash Sale บน Desktop
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   // ดึงข้อมูลตะกร้าสินค้าจาก Zustand Store
   const cartItems = useCartStore((state) => state.items || []);
@@ -63,18 +68,27 @@ export default function StorefrontClient({ products, categories, branchId, promo
   
   // คำนวณราคาปัจจุบันของสินค้าในตะกร้าเทียบกับฐานข้อมูลล่าสุด (ป้องกันกรณีหยิบตอน Sale แล้วราคาเปลี่ยน)
   const effectiveCartItems = useMemo(() => {
+    const now = new Date().getTime();
     return branchCartItems.map((cartItem: any) => {
       const liveProduct = products.find(p => p.id === cartItem.id);
-      // ถ้าระบบอัปเดตว่ายังมีราคาลด ให้ใช้ลด ถ้าไม่มีแล้วให้กลับไปใช้ราคาเต็ม
-      const currentPrice = liveProduct ? (liveProduct.discount_price ?? liveProduct.price) : cartItem.price;
+      
+      let currentPrice = cartItem.price;
+      let isDiscounted = false;
+      
+      if (liveProduct) {
+        const isExpired = liveProduct.discount_end_date ? new Date(liveProduct.discount_end_date).getTime() <= now : false;
+        isDiscounted = !isExpired && liveProduct.discount_price != null;
+        currentPrice = isDiscounted ? liveProduct.discount_price! : liveProduct.price;
+      }
+      
       return {
         ...cartItem,
         currentPrice,
         originalPrice: liveProduct?.price || cartItem.price,
-        isDiscounted: liveProduct ? !!liveProduct.discount_price : false
+        isDiscounted
       };
     });
-  }, [branchCartItems, products]);
+  }, [branchCartItems, products, timeLefts]); // ใส่ timeLefts เพื่อให้ตะกร้าอัปเดตราคาแบบ Real-time ตามเวลานับถอยหลัง
 
   // จัดการปัญหาทศนิยม (Floating Point Issue) ด้วยการปัดเศษ
   const totalItems = Number(effectiveCartItems.reduce((sum, item) => sum + item.quantity, 0).toFixed(2));
@@ -135,47 +149,67 @@ export default function StorefrontClient({ products, categories, branchId, promo
     return () => clearInterval(timer);
   }, [promotions]);
 
+  // ฟังก์ชันรองรับการใช้เมาส์ลากเลื่อน (Drag to Scroll) สำหรับ Desktop
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!sliderRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - sliderRef.current.offsetLeft);
+    setScrollLeft(sliderRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => setIsDragging(false);
+  const handleMouseUp = () => setIsDragging(false);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !sliderRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - sliderRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // ความเร็วในการลาก
+    sliderRef.current.scrollLeft = scrollLeft - walk;
+  };
+
   // กรองเฉพาะสินค้าที่ลดราคา (Flash Sale) และจัดเรียงให้สินค้าหมดไปอยู่ท้ายสุด
   const discountedProducts = useMemo(() => {
-    const discounted = products.filter(p => p.discount_price != null);
+    const now = new Date().getTime();
+    const discounted = products.filter(p => {
+      const isExpired = p.discount_end_date ? new Date(p.discount_end_date).getTime() <= now : false;
+      return p.discount_price != null && !isExpired;
+    });
     return discounted.sort((a, b) => {
       const aOut = a.is_track_stock !== false && a.stock_count <= 0;
       const bOut = b.is_track_stock !== false && b.stock_count <= 0;
       if (aOut === bOut) return 0;
       return aOut ? 1 : -1;
     });
-  }, [products]);
+  }, [products, timeLefts]);
 
   useEffect(() => {
     if (!isMounted) return;
     
     const calculateTimeLeft = () => {
-      const now = new Date();
-      
-      // หาเวลา discount_end_date ที่ใกล้ที่สุดจากสินค้าที่ลดราคา
-      const validEndDates = discountedProducts
-        .map(p => p.discount_end_date ? new Date(p.discount_end_date).getTime() : 0)
-        .filter(time => time > now.getTime());
+      const now = new Date().getTime();
+      const newTimeLefts: Record<string, { hours: number, minutes: number, seconds: number }> = {};
 
-      if (validEndDates.length > 0) {
-        const targetTime = Math.min(...validEndDates);
-        const difference = targetTime - now.getTime();
-        
-        setHasActiveTimer(true);
-        setTimeLeft({
-          hours: Math.floor(difference / (1000 * 60 * 60)), // ชั่วโมง (อาจเกิน 24 ได้)
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60),
-        });
-      } else {
-        setHasActiveTimer(false);
-      }
+      products.forEach(p => {
+        if (p.discount_price != null && p.discount_end_date) {
+          const endTime = new Date(p.discount_end_date).getTime();
+          const difference = endTime - now;
+          if (difference > 0) {
+            newTimeLefts[p.id] = {
+              hours: Math.floor(difference / (1000 * 60 * 60)),
+              minutes: Math.floor((difference / 1000 / 60) % 60),
+              seconds: Math.floor((difference / 1000) % 60),
+            };
+          }
+        }
+      });
+      setTimeLefts(newTimeLefts);
     };
 
     calculateTimeLeft(); // คำนวณครั้งแรก
     const timer = setInterval(calculateTimeLeft, 1000); // อัปเดตทุก 1 วินาที
     return () => clearInterval(timer);
-  }, [isMounted, discountedProducts]);
+  }, [isMounted, products]);
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
@@ -221,6 +255,11 @@ export default function StorefrontClient({ products, categories, branchId, promo
     const step = product.step_value || 1;
     const min = product.min_value || 1;
     const displayQuantity = Number.isInteger(quantity) ? quantity.toString() : quantity.toFixed(2).replace(/\.?0+$/, '');
+    
+    // ตรวจสอบการหมดเวลาแบบ Real-time สำหรับการ์ดแต่ละใบ
+    const now = new Date().getTime();
+    const isExpired = product.discount_end_date ? new Date(product.discount_end_date).getTime() <= now : false;
+    const activeDiscountPrice = isExpired ? null : product.discount_price;
 
     return (
       <div 
@@ -234,8 +273,17 @@ export default function StorefrontClient({ products, categories, branchId, promo
           ) : (
             <span className="bg-slate-50/95 backdrop-blur-sm text-slate-600 border border-slate-100/50 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm">📦 แพ็ก / ชิ้น</span>
           )}
-          {product.discount_price && (
-            <span className="bg-red-600/95 backdrop-blur-sm text-white border border-red-500 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1">🔥 SALE</span>
+          {activeDiscountPrice && (
+            <span className="bg-red-600/95 backdrop-blur-sm text-white border border-red-500 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1">
+              🔥 SALE
+              {timeLefts[product.id] && (
+                <span className="ml-0.5 border-l border-red-400 pl-1.5 tracking-wider font-mono">
+                  {String(timeLefts[product.id].hours).padStart(2, '0')}:
+                  {String(timeLefts[product.id].minutes).padStart(2, '0')}:
+                  {String(timeLefts[product.id].seconds).padStart(2, '0')}
+                </span>
+              )}
+            </span>
           )}
         </div>
 
@@ -259,9 +307,9 @@ export default function StorefrontClient({ products, categories, branchId, promo
           
           <div className="mt-auto space-y-3 pt-3">
             <div className="flex items-end justify-between gap-1">
-              {product.discount_price ? (
+              {activeDiscountPrice ? (
                 <div className="flex flex-col">
-                  <span className="font-bold text-base sm:text-xl text-red-600 truncate">฿{product.discount_price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}</span>
+                  <span className="font-bold text-base sm:text-xl text-red-600 truncate">฿{activeDiscountPrice.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}</span>
                   <span className="text-[10px] sm:text-xs text-slate-400 line-through font-medium">฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}</span>
                 </div>
               ) : (
@@ -279,7 +327,7 @@ export default function StorefrontClient({ products, categories, branchId, promo
                 <button onClick={(e) => { e.preventDefault(); updateQuantity(product.id, Number((quantity + step).toFixed(2))); }} title="เพิ่มจำนวน" className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"><Plus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
               </div>
             ) : (
-              <button onClick={(e) => { e.preventDefault(); addItem({ ...product, price: product.discount_price || product.price, branchId, quantity: min }); }} className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group">
+              <button onClick={(e) => { e.preventDefault(); addItem({ ...product, price: activeDiscountPrice || product.price, branchId, quantity: min }); }} className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group">
                 <ShoppingCart className="w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-110 transition-transform" />
                 <span>เพิ่มลงตะกร้า</span>
               </button>
@@ -331,20 +379,15 @@ export default function StorefrontClient({ products, categories, branchId, promo
             <h2 className="text-lg sm:text-xl font-bold text-red-700 flex items-center gap-2">
               <span className="animate-bounce">🔥</span> สินค้าโปรโมชัน (Flash Sale)
             </h2>
-            {isMounted && hasActiveTimer && (
-              <div className="flex items-center gap-2 text-sm font-medium text-red-800 bg-red-100/80 px-3 py-1.5 rounded-lg w-fit border border-red-200/50">
-                <span>จบลงใน:</span>
-                <div className="flex items-center gap-1 font-bold">
-                  <span className="bg-red-600 text-white w-6 h-6 flex items-center justify-center rounded text-xs shadow-sm">{String(timeLeft.hours).padStart(2, '0')}</span>
-                  <span className="text-red-600 animate-pulse">:</span>
-                  <span className="bg-red-600 text-white w-6 h-6 flex items-center justify-center rounded text-xs shadow-sm">{String(timeLeft.minutes).padStart(2, '0')}</span>
-                  <span className="text-red-600 animate-pulse">:</span>
-                  <span className="bg-red-600 text-white w-6 h-6 flex items-center justify-center rounded text-xs shadow-sm">{String(timeLeft.seconds).padStart(2, '0')}</span>
-                </div>
-              </div>
-            )}
           </div>
-          <div className="flex overflow-x-auto gap-3 sm:gap-4 pb-2 snap-x [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:bg-red-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div 
+            ref={sliderRef}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+            className={`flex overflow-x-auto gap-3 sm:gap-4 pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:bg-red-200 [&::-webkit-scrollbar-thumb]:rounded-full ${isDragging ? 'cursor-grabbing select-none snap-none' : 'cursor-grab snap-x'}`}
+          >
             {discountedProducts.map((product) => renderProductCard(product, true))}
           </div>
         </section>

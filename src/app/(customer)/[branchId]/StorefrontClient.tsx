@@ -14,6 +14,7 @@ interface Product {
   image_url: string | null;
   category_id: string | null;
   stock_count: number;
+  discount_price?: number | null;
   is_track_stock?: boolean;
   unit_name?: string;
   step_value?: number;
@@ -55,11 +56,26 @@ export default function StorefrontClient({ products, categories, branchId, promo
   const addItem = useCartStore((state: any) => state.addItem || state.addToCart);
   const updateQuantity = useCartStore((state: any) => state.updateQuantity || state.updateItem);
   const removeItem = useCartStore((state: any) => state.removeItem || state.removeFromCart);
-  const branchCartItems = cartItems.filter((item) => item.branchId === branchId);
+  const branchCartItems = cartItems.filter((item: any) => item.branchId === branchId);
   
+  // คำนวณราคาปัจจุบันของสินค้าในตะกร้าเทียบกับฐานข้อมูลล่าสุด (ป้องกันกรณีหยิบตอน Sale แล้วราคาเปลี่ยน)
+  const effectiveCartItems = useMemo(() => {
+    return branchCartItems.map((cartItem: any) => {
+      const liveProduct = products.find(p => p.id === cartItem.id);
+      // ถ้าระบบอัปเดตว่ายังมีราคาลด ให้ใช้ลด ถ้าไม่มีแล้วให้กลับไปใช้ราคาเต็ม
+      const currentPrice = liveProduct ? (liveProduct.discount_price ?? liveProduct.price) : cartItem.price;
+      return {
+        ...cartItem,
+        currentPrice,
+        originalPrice: liveProduct?.price || cartItem.price,
+        isDiscounted: liveProduct ? !!liveProduct.discount_price : false
+      };
+    });
+  }, [branchCartItems, products]);
+
   // จัดการปัญหาทศนิยม (Floating Point Issue) ด้วยการปัดเศษ
-  const totalItems = Number(branchCartItems.reduce((sum, item) => sum + item.quantity, 0).toFixed(2));
-  const totalPrice = Number(branchCartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2));
+  const totalItems = Number(effectiveCartItems.reduce((sum, item) => sum + item.quantity, 0).toFixed(2));
+  const totalPrice = Number(effectiveCartItems.reduce((sum, item) => sum + (item.currentPrice * item.quantity), 0).toFixed(2));
   const formatNumber = (num: number) => Number.isInteger(num) ? num.toString() : num.toFixed(2).replace(/\.?0+$/, '');
 
   // จัดกลุ่มหมวดหมู่หลักและหมวดหมู่ย่อยให้อยู่ติดกัน
@@ -135,8 +151,18 @@ export default function StorefrontClient({ products, categories, branchId, promo
     });
   }, [products, selectedCategory, deferredSearchQuery]);
 
+  // เรียงลำดับสินค้า ให้สินค้าที่ "หมด" (Out of stock) ไปอยู่ล่างสุด
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      const aOut = a.is_track_stock !== false && a.stock_count <= 0;
+      const bOut = b.is_track_stock !== false && b.stock_count <= 0;
+      if (aOut === bOut) return 0;
+      return aOut ? 1 : -1;
+    });
+  }, [filteredProducts]);
+
   // สินค้าที่จะแสดงตามจำนวน Load More
-  const visibleProducts = filteredProducts.slice(0, visibleCount);
+  const visibleProducts = sortedProducts.slice(0, visibleCount);
 
   const handleLoadMore = () => {
     setVisibleCount((prev) => prev + 20);
@@ -380,7 +406,6 @@ export default function StorefrontClient({ products, categories, branchId, promo
             {visibleProducts.map((product) => {
               // ลอจิกคำนวณสถานะสต็อกและตะกร้า
               const isOutOfStock = product.is_track_stock !== false && product.stock_count <= 0;
-              const isLowStock = product.is_track_stock !== false && product.stock_count > 0 && product.stock_count < 5;
               const cartItem = branchCartItems.find((item: any) => item.id === product.id);
               const quantity = cartItem ? cartItem.quantity : 0;
               const step = product.step_value || 1;
@@ -398,6 +423,9 @@ export default function StorefrontClient({ products, categories, branchId, promo
                     <span className="bg-blue-50/95 backdrop-blur-sm text-blue-600 border border-blue-100/50 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm">⚖️ ชั่งตามน้ำหนัก</span>
                   ) : (
                     <span className="bg-slate-50/95 backdrop-blur-sm text-slate-600 border border-slate-100/50 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm">📦 แพ็ก / ชิ้น</span>
+                  )}
+                  {product.discount_price && (
+                    <span className="bg-red-600/95 backdrop-blur-sm text-white border border-red-500 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1">🔥 SALE</span>
                   )}
                 </div>
 
@@ -436,18 +464,18 @@ export default function StorefrontClient({ products, categories, branchId, promo
                   
                   <div className="mt-auto space-y-3 pt-3">
                     <div className="flex items-end justify-between gap-1">
-                      <span className="font-bold text-base sm:text-xl text-blue-600 truncate">
-                        ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
-                      </span>
-                      {product.is_track_stock !== false && (
-                        <span className={`shrink-0 text-[10px] sm:text-xs font-bold px-2 py-1 rounded-md border ${
-                          isOutOfStock ? 'text-red-600 bg-red-50 border-red-100' :
-                          isLowStock ? 'text-orange-600 bg-orange-50 border-orange-100' :
-                          'text-emerald-600 bg-emerald-50 border-emerald-100'
-                        }`}>
-                          {isOutOfStock ? 'สินค้าหมด' : 
-                           isLowStock ? `ใกล้หมด! เหลือ ${product.stock_count} ${product.unit_name || ''}` : 
-                           `คงเหลือ ${product.stock_count} ${product.unit_name || ''}`}
+                      {product.discount_price ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-base sm:text-xl text-red-600 truncate">
+                            ฿{product.discount_price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-slate-400 line-through font-medium">
+                            ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-bold text-base sm:text-xl text-blue-600 truncate">
+                          ฿{product.price.toLocaleString()}{product.unit_name ? ` / ${product.unit_name}` : ''}
                         </span>
                       )}
                     </div>
@@ -492,7 +520,7 @@ export default function StorefrontClient({ products, categories, branchId, promo
                       <button
                         onClick={(e) => {
                           e.preventDefault();
-                          addItem({ ...product, branchId, quantity: min });
+                          addItem({ ...product, price: product.discount_price || product.price, branchId, quantity: min });
                         }}
                         className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group"
                       >
@@ -579,7 +607,7 @@ export default function StorefrontClient({ products, categories, branchId, promo
                 <p className="font-medium text-slate-500">ไม่มีสินค้าในตะกร้า</p>
               </div>
             ) : (
-              branchCartItems.map((item: any) => (
+              effectiveCartItems.map((item: any) => (
                 <div key={item.id} className="bg-white p-3 sm:p-4 rounded-2xl shadow-sm border border-slate-100 flex gap-3 sm:gap-4 items-center group">
                   <div className="relative w-16 h-16 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100">
                     {item.image_url ? (
@@ -593,7 +621,15 @@ export default function StorefrontClient({ products, categories, branchId, promo
                   
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-sm text-slate-800 truncate" title={item.name}>{item.name}</h4>
-                    <div className="text-blue-600 font-bold text-sm mt-0.5">฿{item.price.toLocaleString()} {item.unit_name ? <span className="text-xs text-slate-400 font-normal">/ {item.unit_name}</span> : ''}</div>
+                    <div className="font-bold text-sm mt-0.5">
+                      {item.isDiscounted ? (
+                        <span className="text-red-600">฿{item.currentPrice.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-blue-600">฿{item.currentPrice.toLocaleString()}</span>
+                      )}
+                      {item.isDiscounted && <span className="text-xs text-slate-400 line-through font-normal ml-1.5">฿{item.originalPrice.toLocaleString()}</span>}
+                      {item.unit_name ? <span className="text-xs text-slate-400 font-normal ml-1">/ {item.unit_name}</span> : ''}
+                    </div>
                   </div>
                   
                   {/* Quantity Control */}
@@ -638,9 +674,9 @@ export default function StorefrontClient({ products, categories, branchId, promo
             </div>
             <Link 
               href={`/checkout?branchId=${branchId}`}
-              className={`w-full font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md ${branchCartItems.length > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 active:scale-95' : 'bg-slate-100 text-slate-400 shadow-none pointer-events-none'}`}
+              className={`w-full font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md ${effectiveCartItems.length > 0 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 active:scale-95' : 'bg-slate-100 text-slate-400 shadow-none pointer-events-none'}`}
               onClick={(e) => {
-                if (branchCartItems.length === 0) e.preventDefault();
+                if (effectiveCartItems.length === 0) e.preventDefault();
               }}
             >
               ดำเนินการชำระเงิน

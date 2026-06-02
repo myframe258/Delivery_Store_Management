@@ -35,6 +35,9 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [isLocating, setIsLocating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [liveProducts, setLiveProducts] = useState<any[]>([]);
+  const [isPriceValidating, setIsPriceValidating] = useState(true);
 
   const { items, getTotalPrice, clearCart } = useCartStore();
   const router = useRouter();
@@ -48,6 +51,62 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // ดึงราคาล่าสุดจาก Database เพื่อป้องกันการแก้ค่าจาก Local Storage
+  useEffect(() => {
+    const validatePrices = async () => {
+      if (!branch?.id || items.length === 0) {
+        setIsPriceValidating(false);
+        return;
+      }
+      
+      setIsPriceValidating(true);
+      const productIds = items.map((item: any) => item.id);
+      
+      try {
+        const { data, error } = await supabase
+          .from('branch_inventory')
+          .select('product_id, discount_price, products(price)')
+          .eq('branch_id', branch.id)
+          .in('product_id', productIds);
+
+        if (!error && data) {
+          const liveData = data.map(inv => ({
+            id: inv.product_id,
+            price: Array.isArray(inv.products) ? inv.products[0]?.price : (inv.products as any)?.price,
+            discount_price: inv.discount_price
+          }));
+          setLiveProducts(liveData);
+        }
+      } catch (err) {
+        console.error("Price validation error:", err);
+      } finally {
+        setIsPriceValidating(false);
+      }
+    };
+
+    if (isMounted) validatePrices();
+  }, [branch?.id, isMounted, supabase, items]);
+
+  // สร้างข้อมูลตะกร้าที่เทียบราคาล่าสุดแล้ว
+  const effectiveCartItems = useMemo(() => {
+    return items.map((cartItem: any) => {
+      const liveProduct = liveProducts.find(p => p.id === cartItem.id);
+      const currentPrice = liveProduct ? (liveProduct.discount_price ?? liveProduct.price) : cartItem.price;
+      const originalPrice = liveProduct ? liveProduct.price : cartItem.price;
+      const isDiscounted = liveProduct ? !!liveProduct.discount_price : false;
+      const priceChanged = liveProduct && currentPrice !== cartItem.price;
+
+      return { ...cartItem, currentPrice, originalPrice, isDiscounted, priceChanged };
+    });
+  }, [items, liveProducts]);
+
+  const liveTotalPrice = useMemo(() => effectiveCartItems.reduce((sum, item) => sum + (item.currentPrice * item.quantity), 0), [effectiveCartItems]);
+  const hasPriceChanged = useMemo(() => effectiveCartItems.some((item: any) => item.priceChanged), [effectiveCartItems]);
 
   // จุดติดตั้งฟังก์ชัน: (1) ดึงตำแหน่งปัจจุบันของลูกค้าผ่าน HTML5 Geolocation
   useEffect(() => {
@@ -116,17 +175,17 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           branch_id: branch.id,
-          total_price: getTotalPrice(),
+        total_price: liveTotalPrice,
           customer_info: {
             name: user.user_metadata?.full_name || user.email,
             phone: user.phone || '',
           },
           lat: markerPos.lat,
           lng: markerPos.lng,
-          items: items.map(item => ({
+        items: effectiveCartItems.map((item: any) => ({
             product_id: item.id,
             quantity: item.quantity,
-            price: item.price,
+          price: item.currentPrice,
           })),
         }),
       });
@@ -205,17 +264,24 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
           </div>
         )}
 
+        {hasPriceChanged && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3 items-start mb-4">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-amber-800 text-sm">ราคาสินค้าบางรายการมีการเปลี่ยนแปลงตามโปรโมชั่นปัจจุบัน โปรดตรวจสอบยอดรวมก่อนชำระเงิน</p>
+          </div>
+        )}
+
         {/* ปุ่มยืนยันการสั่งซื้อ */}
         <button 
           onClick={handleConfirmOrder}
-          disabled={!isWithinRadius || isSaving}
+          disabled={!isWithinRadius || isSaving || isPriceValidating}
           className={`w-full py-3.5 rounded-xl font-semibold transition-colors shadow-sm flex justify-center items-center gap-2 ${
-            isWithinRadius && !isSaving
+            isWithinRadius && !isSaving && !isPriceValidating
               ? 'bg-blue-600 hover:bg-blue-700 text-white' 
               : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
           }`}
         >
-          {isSaving ? 'กำลังบันทึกข้อมูล...' : 'ยืนยันการสั่งซื้อและชำระเงิน'}
+          {isPriceValidating ? 'กำลังตรวจสอบราคา...' : isSaving ? 'กำลังบันทึกข้อมูล...' : 'ยืนยันการสั่งซื้อและชำระเงิน'}
         </button>
       </div>
     </div>

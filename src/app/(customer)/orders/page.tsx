@@ -24,6 +24,8 @@ type Order = {
     delivery_date?: string;
     delivery_slot?: string;
     delivery_method?: 'delivery' | 'pickup';
+    payment_method?: string;
+    payment_status?: string;
     branches: { name: string };
     order_items: OrderItem[];
 };
@@ -38,7 +40,6 @@ export default function CustomerOrdersPage() {
     const router = useRouter();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState<any>(null);
     const [slots, setSlots] = useState<DeliverySlot[]>([]);
 
     const supabase = createBrowserClient(
@@ -48,6 +49,27 @@ export default function CustomerOrdersPage() {
 
     useEffect(() => {
         checkUserAndFetchOrders();
+
+        // เปิดใช้งาน Supabase Realtime เพื่ออัปเดตสถานะคำสั่งซื้อแบบ Real-time ทันที
+        const channel = supabase
+            .channel('customer-orders')
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'orders' },
+                (payload) => {
+                    setOrders((prev) =>
+                        prev.map((order) =>
+                            order.id === payload.new.id ? { ...order, status: payload.new.status as any, payment_status: payload.new.payment_status } : order
+                        )
+                    );
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+        
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -61,8 +83,6 @@ export default function CustomerOrdersPage() {
                 router.push('/login?returnTo=/customer/orders');
                 return;
             }
-
-            setUser(session.user);
 
             // ดึงข้อมูลรอบจัดส่งเพื่อนำมา map แสดงชื่อ
             const { data: slotsData } = await supabase.from('delivery_slots').select('id, name, time_range');
@@ -79,6 +99,8 @@ export default function CustomerOrdersPage() {
           delivery_date,
           delivery_slot,
           delivery_method,
+          payment_method,
+          payment_status,
           branches (name),
           order_items (
             quantity, 
@@ -180,6 +202,20 @@ export default function CustomerOrdersPage() {
                                         <p className="font-bold text-gray-900">#{order.id.slice(0, 8).toUpperCase()}</p>
                                         <p className="text-xs text-gray-400 mt-1">สั่งเมื่อ: {new Date(order.created_at).toLocaleString('th-TH')}</p>
                                         
+                                        {/* ป้ายสถานะการชำระเงิน */}
+                                        {order.payment_status && order.payment_method === 'promptpay' && (
+                                            <div className="mt-2.5 mb-1 flex gap-2">
+                                                {order.payment_status === 'pending_verification' && <span className="text-[10px] font-bold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full border border-amber-200">รอตรวจสอบสลิป</span>}
+                                                {order.payment_status === 'payment_failed' && <span className="text-[10px] font-bold px-2.5 py-1 bg-red-100 text-red-700 rounded-full border border-red-200">สลิปไม่ถูกต้อง</span>}
+                                                {order.payment_status === 'paid' && <span className="text-[10px] font-bold px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">ชำระเงินสำเร็จ</span>}
+                                            </div>
+                                        )}
+                                        {order.payment_method === 'cod' && (
+                                            <div className="mt-2.5 mb-1 flex gap-2">
+                                                <span className="text-[10px] font-bold px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full border border-blue-200">ชำระเงินปลายทาง / ที่ร้าน</span>
+                                            </div>
+                                        )}
+
                                         {/* แสดงวันและรอบจัดส่ง */}
                                         {order.delivery_date && (
                                             <div className="flex flex-wrap items-center gap-1.5 mt-3">

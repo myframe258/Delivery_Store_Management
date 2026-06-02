@@ -25,6 +25,7 @@ type ProductRecord = {
 type InventoryRecord = {
   stock_count: number;
   status: number;
+  discount_price?: number | null;
   products: ProductRecord | ProductRecord[] | null;
 };
 
@@ -54,6 +55,7 @@ export default async function BranchStorefrontPage({
     .select(`
       stock_count,
       status,
+      discount_price,
       products!inner (
         id,
         name,
@@ -91,11 +93,6 @@ export default async function BranchStorefrontPage({
     const prod = Array.isArray(item.products) ? item.products[0] : item.products;
     if (!prod) return null;
     
-    // กรองสินค้าที่ต้องนับสต็อกแต่สต็อกหมดทิ้งไป (ถ้าไม่ต้องนับสต็อก แม้สต็อกเป็น 0 ก็ให้ผ่านได้)
-    if (prod.is_track_stock !== false && item.stock_count <= 0) {
-      return null;
-    }
-
     const unit = Array.isArray(prod.product_units) ? prod.product_units[0] : prod.product_units;
 
     return {
@@ -106,6 +103,7 @@ export default async function BranchStorefrontPage({
       image_url: prod.image_url,
       category_id: prod.category_id || null,
       stock_count: item.stock_count,
+      discount_price: item.discount_price || null,
       is_track_stock: prod.is_track_stock !== false,
       unit_name: unit?.name,
       step_value: unit?.step_value ? Number(unit.step_value) : undefined,

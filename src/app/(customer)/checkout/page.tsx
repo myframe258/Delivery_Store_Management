@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
@@ -56,6 +56,8 @@ export default function CheckoutPage() {
   const [user, setUser] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isMounted, setIsMounted] = useState(false); // เพิ่ม State สำหรับรอโหลดข้อมูล
+  const [liveProducts, setLiveProducts] = useState<any[]>([]);
+  const [isPriceValidating, setIsPriceValidating] = useState(true);
 
   // State สำหรับเก็บรูปแบบการรับสินค้า (Delivery / Pickup)
   const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('delivery');
@@ -175,6 +177,58 @@ export default function CheckoutPage() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // ดึงราคาล่าสุดจาก Database เพื่อป้องกันการแก้ค่าจาก Local Storage
+  useEffect(() => {
+    const validatePrices = async () => {
+      if (!activeBranchId || items.length === 0) {
+        setIsPriceValidating(false);
+        return;
+      }
+      
+      setIsPriceValidating(true);
+      const productIds = items.map((item: any) => item.id);
+      
+      try {
+        const { data, error } = await supabase
+          .from('branch_inventory')
+          .select('product_id, discount_price, products(price)')
+          .eq('branch_id', activeBranchId)
+          .in('product_id', productIds);
+
+        if (!error && data) {
+          const liveData = data.map(inv => ({
+            id: inv.product_id,
+            price: Array.isArray(inv.products) ? inv.products[0]?.price : (inv.products as any)?.price,
+            discount_price: inv.discount_price
+          }));
+          setLiveProducts(liveData);
+        }
+      } catch (err) {
+        console.error("Price validation error:", err);
+      } finally {
+        setIsPriceValidating(false);
+      }
+    };
+
+    if (isMounted) validatePrices();
+  }, [activeBranchId, isMounted, supabase, items]);
+
+  // สร้างข้อมูลตะกร้าที่เทียบราคาล่าสุดแล้ว
+  const effectiveCartItems = useMemo(() => {
+    return items.map((cartItem: any) => {
+      const liveProduct = liveProducts.find(p => p.id === cartItem.id);
+      const currentPrice = liveProduct ? (liveProduct.discount_price ?? liveProduct.price) : cartItem.price;
+      const originalPrice = liveProduct ? liveProduct.price : cartItem.price;
+      const isDiscounted = liveProduct ? !!liveProduct.discount_price : false;
+      const priceChanged = liveProduct && currentPrice !== cartItem.price;
+
+      return { ...cartItem, currentPrice, originalPrice, isDiscounted, priceChanged };
+    });
+  }, [items, liveProducts]);
+
+  const liveTotalPrice = useMemo(() => effectiveCartItems.reduce((sum, item) => sum + (item.currentPrice * item.quantity), 0), [effectiveCartItems]);
+  const hasPriceChanged = useMemo(() => effectiveCartItems.some((item: any) => item.priceChanged), [effectiveCartItems]);
 
   // ป้องกันการเข้าหน้า Checkout เมื่อตะกร้าว่าง และตรวจสอบสถานะ Auth แบบเงียบๆ
   useEffect(() => {
@@ -461,7 +515,7 @@ export default function CheckoutPage() {
         .insert({
           branch_id: Number(activeBranchId), // ตารางต้องการ bigint
           customer_id: user?.id, // บันทึกไอดีลูกค้าลง Database
-          total_price: getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0),
+          total_price: liveTotalPrice + (deliveryMethod === 'delivery' ? deliveryFee : 0),
           lat: deliveryMethod === 'delivery' ? location.lat : null,
           lng: deliveryMethod === 'delivery' ? location.lng : null,
           delivery_date: deliveryDate,
@@ -485,11 +539,11 @@ export default function CheckoutPage() {
       if (orderError || !orderData) throw new Error(orderError?.message || 'ไม่สามารถสร้างคำสั่งซื้อได้');
 
       // 2. บันทึกข้อมูลสินค้าลงตาราง order_items
-      const orderItems = items.map((item) => ({
+      const orderItems = effectiveCartItems.map((item) => ({
         order_id: orderData.id,
         product_id: item.id,
         quantity: item.quantity,
-        price_at_purchase: item.price, // ตาม Database Schema กำหนดเป็น character varying
+        price_at_purchase: item.currentPrice, // ใช้ราคาที่อัปเดตล่าสุด
       }));
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
@@ -534,7 +588,7 @@ export default function CheckoutPage() {
       if (deliveryMethod === 'pickup' && deliveryDate === todayStr) {
         try {
           const slotName = slots.find(s => s.id === deliverySlot)?.name || 'ไม่ระบุเวลา';
-          const message = `\n🔔 มีลูกค้านัดรับที่ร้านวันนี้!\nออเดอร์: #${orderData.id.slice(0, 8).toUpperCase()}\nลูกค้า: ${formData.name}\nโทร: ${formData.phone}\nเวลานัดรับ: ${slotName}\nยอดสุทธิ: ฿${getTotalPrice().toLocaleString()}`;
+          const message = `\n🔔 มีลูกค้านัดรับที่ร้านวันนี้!\nออเดอร์: #${orderData.id.slice(0, 8).toUpperCase()}\nลูกค้า: ${formData.name}\nโทร: ${formData.phone}\nเวลานัดรับ: ${slotName}\nยอดสุทธิ: ฿${liveTotalPrice.toLocaleString()}`;
 
           await fetch('/api/notify', {
             method: 'POST',
@@ -840,10 +894,10 @@ export default function CheckoutPage() {
             {paymentMethod === 'promptpay' && (
               <div className="mt-4 bg-gray-50 p-6 rounded-xl border border-gray-200 text-center animate-in fade-in zoom-in-95 duration-300">
                 <h3 className="font-semibold text-gray-700 mb-2">สแกน QR Code เพื่อโอนเงิน</h3>
-                <p className="text-xl font-bold text-blue-600 mb-4">ยอดโอน: ฿{(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</p>
+                <p className="text-xl font-bold text-blue-600 mb-4">ยอดโอน: ฿{(liveTotalPrice + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</p>
                 <div className="w-48 h-48 bg-white mx-auto mb-4 border border-gray-200 flex items-center justify-center rounded-lg overflow-hidden relative shadow-sm">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://promptpay.io/0928727608/${getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)}.png`} alt="PromptPay QR Code" className="w-full h-full object-contain" />
+                  <img src={`https://promptpay.io/0928727608/${liveTotalPrice + (deliveryMethod === 'delivery' ? deliveryFee : 0)}.png`} alt="PromptPay QR Code" className="w-full h-full object-contain" />
                 </div>
                 <div className="text-left mt-4 relative">
                   {isCompressing && (
@@ -906,8 +960,21 @@ export default function CheckoutPage() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 sticky top-6">
             <h2 className="text-xl font-bold text-slate-800 mb-6">สรุปคำสั่งซื้อ</h2>
 
-            <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2">
-              {items.map((item: any) => {
+            {hasPriceChanged && (
+              <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-amber-800 text-sm leading-relaxed">ราคาสินค้าบางรายการมีการอัปเดตตามโปรโมชั่นปัจจุบัน โปรดตรวจสอบยอดรวมก่อนชำระเงิน</p>
+              </div>
+            )}
+
+            <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2 min-h-[100px]">
+              {isPriceValidating ? (
+                 <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                   <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
+                   <p className="text-sm font-medium">กำลังอัปเดตราคาสินค้าล่าสุด...</p>
+                 </div>
+              ) : (
+              effectiveCartItems.map((item: any) => {
                 const step = item.step_value || 1;
                 const min = item.min_value || 1;
                 const displayQuantity = Number.isInteger(item.quantity) ? item.quantity.toString() : item.quantity.toFixed(2).replace(/\.?0+$/, '');
@@ -917,10 +984,20 @@ export default function CheckoutPage() {
                     <div className="flex justify-between items-start">
                       <div className="flex-1 pr-4">
                         <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
-                        <div className="text-sm font-semibold text-blue-600 mt-1">฿{item.price.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</div>
+                        <div className="text-sm font-semibold mt-1">
+                          {item.isDiscounted ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-red-600">฿{item.currentPrice.toLocaleString()}</span>
+                              <span className="text-xs text-gray-400 line-through">฿{item.originalPrice.toLocaleString()}</span>
+                              {item.unit_name && <span className="text-gray-500 font-normal"> / {item.unit_name}</span>}
+                            </div>
+                          ) : (
+                            <span className="text-blue-600">฿{item.currentPrice.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</span>
+                          )}
+                        </div>
                       </div>
                       <div className="font-semibold text-gray-800">
-                        ฿{(item.price * item.quantity).toLocaleString()}
+                        ฿{(item.currentPrice * item.quantity).toLocaleString()}
                       </div>
                     </div>
                     {/* ส่วนควบคุมจำนวนสินค้า */}
@@ -947,13 +1024,14 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                 )
-              })}
+              })
+              )}
             </div>
 
             <div className="border-t border-gray-200 pt-4 space-y-3 mb-6">
               <div className="flex justify-between text-gray-600">
                 <span>ค่าสินค้า</span>
-                <span>฿{getTotalPrice().toLocaleString()}</span>
+                <span>฿{liveTotalPrice.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>ค่าจัดส่ง {deliveryMethod === 'delivery' ? `(ระยะทาง ${distanceKm !== null ? distanceKm.toFixed(1) : 0} กม.)` : ''}</span>
@@ -961,7 +1039,7 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-xl font-bold text-blue-600 pt-2 border-t border-gray-200">
                 <span>ยอดรวมทั้งสิ้น</span>
-                <span>฿{(getTotalPrice() + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</span>
+                <span>฿{(liveTotalPrice + (deliveryMethod === 'delivery' ? deliveryFee : 0)).toLocaleString()}</span>
               </div>
             </div>
 
@@ -978,11 +1056,11 @@ export default function CheckoutPage() {
               <button
                 type="submit"
                 form="checkout-form"
-                disabled={isSubmitting || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) || (paymentMethod === 'promptpay' && !slipFile)}
-                className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${(deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) || (paymentMethod === 'promptpay' && !slipFile) ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
+                disabled={isSubmitting || isPriceValidating || (deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) || (paymentMethod === 'promptpay' && !slipFile)}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition shadow-sm flex justify-center items-center ${(deliveryMethod === 'delivery' && distanceKm !== null && !isWithinRadius) || (deliveryMethod === 'delivery' && isCalculatingFee) || (paymentMethod === 'promptpay' && !slipFile) || isPriceValidating ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-70 disabled:cursor-not-allowed'
                   }`}
               >
-                {isSubmitting ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}
+                {isSubmitting || isPriceValidating ? 'กำลังดำเนินการ...' : 'ยืนยันการสั่งซื้อ'}
               </button>
             )}
           </div>

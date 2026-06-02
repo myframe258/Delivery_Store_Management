@@ -14,6 +14,7 @@ type Branch = {
   lat: number;
   lng: number;
   service_radius?: number;
+  is_active?: boolean;
 };
 
 
@@ -41,6 +42,7 @@ export default function SuperAdminBranchesPage() {
     lat: '',
     lng: '',
     service_radius: '15', // ค่าเริ่มต้น 15 กม.
+    is_active: true,
   });
 
   useEffect(() => {
@@ -77,10 +79,11 @@ export default function SuperAdminBranchesPage() {
         lat: branch.lat ? String(branch.lat) : '',
         lng: branch.lng ? String(branch.lng) : '',
         service_radius: branch.service_radius ? String(branch.service_radius) : '15',
+        is_active: branch.is_active !== false,
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', address: '', phone: '', lat: '', lng: '', service_radius: '15' });
+      setFormData({ name: '', address: '', phone: '', lat: '', lng: '', service_radius: '15', is_active: true });
     }
     setIsModalOpen(true);
   };
@@ -104,6 +107,7 @@ export default function SuperAdminBranchesPage() {
         lat: parseFloat(formData.lat),
         lng: parseFloat(formData.lng),
         service_radius: parseInt(formData.service_radius, 10) || 15,
+        is_active: formData.is_active,
       };
 
       if (editingId) {
@@ -116,11 +120,31 @@ export default function SuperAdminBranchesPage() {
         toast.success('อัปเดตข้อมูลสาขาสำเร็จ');
       } else {
         // Insert
-        const { error } = await supabase
+        const { data: newBranch, error } = await supabase
           .from('branches')
-          .insert([payload]);
+          .insert([payload])
+          .select('id')
+          .single();
+          
         if (error) throw error;
-        toast.success('เพิ่มสาขาใหม่สำเร็จ');
+        
+        // ดึงรายการสินค้าทั้งหมดที่มีอยู่ในระบบ เพื่อนำไปสร้างสต็อกเริ่มต้นให้สาขาใหม่
+        if (newBranch) {
+          const { data: products } = await supabase.from('products').select('id');
+          
+          if (products && products.length > 0) {
+            const inventoryPayload = products.map((p) => ({
+              branch_id: newBranch.id,
+              product_id: p.id,
+              stock_count: 0,
+              status: 0 // ค่าเริ่มต้นให้ปิดการขายไว้ก่อน (0)
+            }));
+            const { error: invError } = await supabase.from('branch_inventory').insert(inventoryPayload);
+            if (invError) console.error('Error inserting initial inventory:', invError.message);
+          }
+        }
+        
+        toast.success('เพิ่มสาขาใหม่และเตรียมข้อมูลสินค้าสำเร็จ');
       }
 
       closeModal();
@@ -133,6 +157,24 @@ export default function SuperAdminBranchesPage() {
     }
   };
 
+  const handleToggleStatus = async (id: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    
+    // Optimistic Update: อัปเดต UI ทันทีไม่ต้องรอโหลด
+    setBranches(prev => prev.map(b => b.id === id ? { ...b, is_active: nextStatus } : b));
+    
+    try {
+      const { error } = await supabase.from('branches').update({ is_active: nextStatus }).eq('id', id);
+      if (error) throw error;
+      
+      toast.success(nextStatus ? 'เปิดให้บริการสาขานี้แล้ว' : 'ปิดการให้บริการสาขานี้ชั่วคราว');
+    } catch (error: any) {
+      console.error('Error toggling branch status:', error);
+      toast.error(`ไม่สามารถเปลี่ยนสถานะได้: ${error.message}`);
+      fetchBranches(); // Rollback กลับถ้าเซฟไม่สำเร็จ
+    }
+  };
+
   const handleDeleteRequest = (branch: Branch) => {
     setBranchToDelete(branch);
   };
@@ -140,6 +182,38 @@ export default function SuperAdminBranchesPage() {
   const handleDelete = async () => {
     if (!branchToDelete) return;
     try {
+      // 1. ตรวจสอบว่ามีพนักงานผูกอยู่หรือไม่
+      const { count: userCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchToDelete.id);
+        
+      if (userCount && userCount > 0) {
+        toast.error(`ไม่สามารถลบได้ เนื่องจากมีพนักงานสังกัดสาขานี้ ${userCount} คน`);
+        setBranchToDelete(null);
+        return;
+      }
+
+      // 2. ตรวจสอบว่ามีคำสั่งซื้อผูกอยู่หรือไม่
+      const { count: orderCount } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchToDelete.id);
+
+      if (orderCount && orderCount > 0) {
+        toast.error(`ไม่สามารถลบได้ เนื่องจากมีคำสั่งซื้อของสาขานี้ ${orderCount} รายการ`);
+        setBranchToDelete(null);
+        return;
+      }
+
+      // 3. ลบสต็อกสินค้าของสาขานี้ออกก่อน (แก้ปัญหา Foreign Key Constraint)
+      const { error: invError } = await supabase
+        .from('branch_inventory')
+        .delete()
+        .eq('branch_id', branchToDelete.id);
+      if (invError) throw invError;
+
+      // 4. ลบสาขา
       const { error } = await supabase
         .from('branches')
         .delete()
@@ -189,10 +263,24 @@ export default function SuperAdminBranchesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {branches.map((branch) => (
-            <div key={branch.id} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col">
+            <div key={branch.id} className={`bg-white rounded-2xl p-6 shadow-sm border ${branch.is_active === false ? 'border-gray-200 opacity-75' : 'border-gray-100'} hover:shadow-md transition-all flex flex-col`}>
               <div className="flex justify-between items-start mb-4">
-                <h2 className="text-xl font-bold text-gray-800 line-clamp-1">{branch.name}</h2>
-                <div className="flex gap-2">
+                <div className="flex-1 pr-2">
+                  <h2 className="text-xl font-bold text-gray-800 line-clamp-1">{branch.name}</h2>
+                  <div className="mt-2">
+                    <label className="inline-flex items-center cursor-pointer">
+                      <div className="relative">
+                        <input type="checkbox" className="sr-only" checked={branch.is_active !== false} onChange={() => handleToggleStatus(branch.id, branch.is_active !== false)} />
+                        <div className={`block w-10 h-6 rounded-full transition-colors ${branch.is_active !== false ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                        <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${branch.is_active !== false ? 'transform translate-x-4' : ''}`}></div>
+                      </div>
+                      <span className={`ml-2 text-xs font-bold ${branch.is_active !== false ? 'text-emerald-600' : 'text-gray-500'}`}>
+                        {branch.is_active !== false ? 'เปิดให้บริการ' : 'ปิดชั่วคราว'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
                   <button onClick={() => openModal(branch)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสาขา">
                     <Edit2 className="w-4 h-4" />
                   </button>
@@ -283,6 +371,20 @@ export default function SuperAdminBranchesPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">ลองจิจูด (Longitude) <span className="text-red-500">*</span></label>
                   <input required type="number" step="any" value={formData.lng} onChange={(e) => setFormData({...formData, lng: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="98.9853" />
                 </div>
+              </div>
+              
+              <div>
+                <label className="flex items-center cursor-pointer gap-2 mt-2">
+                  <div className="relative">
+                    <input type="checkbox" className="sr-only" checked={formData.is_active} onChange={(e) => setFormData({...formData, is_active: e.target.checked})} />
+                    <div className={`block w-10 h-6 rounded-full transition-colors ${formData.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${formData.is_active ? 'transform translate-x-4' : ''}`}></div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-800">สถานะเปิดให้บริการ</span>
+                    <span className="text-xs text-gray-500">หากปิด สาขานี้จะไม่แสดงให้ลูกค้าเลือกใช้งานในหน้าร้าน</span>
+                  </div>
+                </label>
               </div>
               
               <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-4">

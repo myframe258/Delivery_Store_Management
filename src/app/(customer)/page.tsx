@@ -13,7 +13,8 @@ export default async function CustomerHomePage() {
   // ดึงข้อมูลสาขาจาก DB (ทำงานบน Server)
   const { data: branches, error } = await supabase
     .from('branches')
-    .select('id, name, lat, lng, address');
+    .select('id, name, lat, lng, address')
+    .eq('is_active', true);
 
   const hasBranches = branches && branches.length > 0;
 

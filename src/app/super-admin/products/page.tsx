@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Package, Plus, Edit2, Trash2, X, Image as ImageIcon, UploadCloud, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, PowerOff } from 'lucide-react';
+import { Package, Plus, Edit2, Trash2, X, Image as ImageIcon, UploadCloud, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, PowerOff, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import toast from 'react-hot-toast';
 
 type Product = {
   id: string;
+  sku?: string | null;
   name: string;
   description: string;
   price: number;
@@ -15,6 +17,7 @@ type Product = {
   unit_id?: string | null;
   is_active?: boolean;
   is_track_stock?: boolean;
+  branch_inventory?: { branch_id: number; status: number }[];
 };
 
 export default function SuperAdminProductsPage() {
@@ -40,6 +43,9 @@ export default function SuperAdminProductsPage() {
   const [missingMasterData, setMissingMasterData] = useState<{ categories: string[], units: string[] } | null>(null);
   const [pendingFileData, setPendingFileData] = useState<any[] | null>(null);
 
+  // Branch Status Modal State
+  const [branchStatusModal, setBranchStatusModal] = useState<{ isOpen: boolean; product: Product | null }>({ isOpen: false, product: null });
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,6 +54,7 @@ export default function SuperAdminProductsPage() {
 
   // Form State
   const [formData, setFormData] = useState({
+    sku: '',
     name: '',
     description: '',
     price: '',
@@ -56,6 +63,21 @@ export default function SuperAdminProductsPage() {
     unit_id: '',
     is_track_stock: true,
   });
+
+  // Table Management State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' } | null>(null);
+
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    action: 'delete' | 'disable' | null;
+    id: string;
+    name: string;
+  }>({ isOpen: false, action: null, id: '', name: '' });
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -67,7 +89,7 @@ export default function SuperAdminProductsPage() {
     // ดึงหมวดหมู่ และ สาขามาเก็บไว้สำหรับการ Map ข้อมูลตอน Bulk Upload
     const { data: catData } = await supabase.from('categories').select('id, name, parent_id').order('sort_order', { ascending: true });
     if (catData) setCategories(catData);
-    const { data: branchData } = await supabase.from('branches').select('id');
+    const { data: branchData } = await supabase.from('branches').select('id, name').order('name');
     if (branchData) setBranches(branchData);
     const { data: unitData } = await supabase.from('product_units').select('id, name').order('name');
     if (unitData) setUnits(unitData);
@@ -78,7 +100,7 @@ export default function SuperAdminProductsPage() {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select('*, branch_inventory(branch_id, status)')
         .eq('is_active', true)
         .order('name');
 
@@ -86,7 +108,7 @@ export default function SuperAdminProductsPage() {
       setProducts(data || []);
     } catch (error: any) {
       console.error('Error fetching products:', error.message);
-      alert('ไม่สามารถดึงข้อมูลสินค้าได้');
+      toast.error('ไม่สามารถดึงข้อมูลสินค้าได้');
     } finally {
       setLoading(false);
     }
@@ -96,6 +118,7 @@ export default function SuperAdminProductsPage() {
     if (product) {
       setEditingId(product.id);
       setFormData({
+        sku: product.sku || '',
         name: product.name || '',
         description: product.description || '',
         price: product.price ? String(product.price) : '',
@@ -106,7 +129,7 @@ export default function SuperAdminProductsPage() {
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', description: '', price: '', image_url: '', category_id: '', unit_id: '', is_track_stock: false });
+      setFormData({ sku: '', name: '', description: '', price: '', image_url: '', category_id: '', unit_id: '', is_track_stock: false });
     }
     setIsModalOpen(true);
   };
@@ -143,7 +166,7 @@ export default function SuperAdminProductsPage() {
       setFormData({ ...formData, image_url: publicUrl });
     } catch (error: any) {
       console.error('Upload error:', error.message);
-      alert(`เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: ${error.message}`);
+      toast.error(`เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: ${error.message}`);
     } finally {
       setIsUploadingImage(false);
     }
@@ -171,6 +194,7 @@ export default function SuperAdminProductsPage() {
 
     try {
       const payload = {
+        sku: formData.sku || null,
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
@@ -195,7 +219,7 @@ export default function SuperAdminProductsPage() {
           await deleteImageFromStorage(existingProduct.image_url);
         }
 
-        alert('อัปเดตข้อมูลสินค้าสำเร็จ');
+        toast.success('อัปเดตข้อมูลสินค้าสำเร็จ');
       } else {
         // Insert New Product
         const { data: newProduct, error } = await supabase
@@ -220,68 +244,83 @@ export default function SuperAdminProductsPage() {
           await supabase.from('branch_inventory').insert(inventoryPayload);
         }
 
-        alert('เพิ่มสินค้าใหม่และอัปเดตรายชื่อไปยังทุกสาขาสำเร็จ');
+        toast.success('เพิ่มสินค้าใหม่และอัปเดตรายชื่อไปยังทุกสาขาสำเร็จ');
       }
 
       closeModal();
       fetchProducts();
     } catch (error: any) {
       console.error('Error saving product:', error.message);
-      alert(`เกิดข้อผิดพลาด: ${error.message}`);
+      toast.error(`เกิดข้อผิดพลาด: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ฟังก์ชันสำหรับระงับการขายสินค้านี้ในทุกสาขาทันที
-  const handleDisableGlobally = async (id: string, name: string) => {
-    if (!window.confirm(`ยืนยันการ "ระงับการขาย" สินค้า "${name}" ในทุกสาขาใช่หรือไม่?\nสถานะสินค้าในทุกสาขาจะถูกเปลี่ยนเป็นปิดการขายทันที`)) {
-      return;
-    }
+  const executeConfirmAction = async () => {
+    if (!confirmModal.action || !confirmModal.id) return;
+    setIsProcessingAction(true);
 
     try {
-      const { error } = await supabase
-        .from('branch_inventory')
-        .update({ status: 0 })
-        .eq('product_id', id);
-        
-      if (error) throw error;
-      
-      alert(`ระงับการขายสินค้า "${name}" ในทุกสาขาเรียบร้อยแล้ว`);
+      if (confirmModal.action === 'delete') {
+        // 1. ลบจากสต็อกของทุกสาขาก่อนเพื่อป้องกัน Foreign Key Constraint Error
+        const { error: invError } = await supabase.from('branch_inventory').delete().eq('product_id', confirmModal.id);
+        if (invError) throw invError;
+        // 2. ซ่อนสินค้า (Soft Delete) แทนการลบออกจากตาราง products หลัก
+        const { error } = await supabase.from('products').update({ is_active: false }).eq('id', confirmModal.id);
+        if (error) throw error;
+        toast.success('ลบสินค้าสำเร็จ');
+        setProducts(products.filter(p => p.id !== confirmModal.id));
+      } else if (confirmModal.action === 'disable') {
+        const { error } = await supabase.from('branch_inventory').update({ status: 0 }).eq('product_id', confirmModal.id);
+        if (error) throw error;
+        toast.success(`ระงับการขายสินค้า "${confirmModal.name}" ในทุกสาขาเรียบร้อยแล้ว`);
+        // อัปเดต State UI ทันทีไม่ต้องรอโหลดใหม่ (Optimistic Update)
+        setProducts(products.map(p => 
+          p.id === confirmModal.id 
+            ? { ...p, branch_inventory: p.branch_inventory?.map(inv => ({ ...inv, status: 0 })) } 
+            : p
+        ));
+      }
     } catch (error: any) {
-      console.error('Error disabling product globally:', error.message);
-      alert('ไม่สามารถอัปเดตสถานะในสาขาได้: ' + error.message);
+      console.error(`Error ${confirmModal.action} product:`, error.message);
+      toast.error(`เกิดข้อผิดพลาด: ${error.message}`);
+    } finally {
+      setIsProcessingAction(false);
+      setConfirmModal({ isOpen: false, action: null, id: '', name: '' });
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบสินค้า "${name}" ?\nข้อมูลสต็อกที่ผูกกับสาขาต่างๆ จะถูกลบทิ้งทั้งหมด`)) {
-      return;
-    }
+  // ฟังก์ชันสำหรับเปิด/ปิดสถานะสินค้ารายสาขาจากใน Modal
+  const handleToggleBranchStatus = async (productId: string, branchId: number, currentStatus: number) => {
+    const nextStatus = currentStatus === 1 ? 0 : 1;
+    
+    // Optimistic Update: อัปเดต UI ทันทีไม่ต้องรอโหลด
+    const updateInventory = (inv: { branch_id: number; status: number }[]) => {
+      const existingIdx = inv.findIndex(i => i.branch_id === branchId);
+      if (existingIdx >= 0) {
+        return inv.map(i => i.branch_id === branchId ? { ...i, status: nextStatus } : i);
+      }
+      return [...inv, { branch_id: branchId, status: nextStatus }];
+    };
+
+    setBranchStatusModal(prev => prev.product ? { ...prev, product: { ...prev.product, branch_inventory: updateInventory(prev.product.branch_inventory || []) } } : prev);
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, branch_inventory: updateInventory(p.branch_inventory || []) } : p));
 
     try {
-      const productToDelete = products.find(p => p.id === id);
-
-      // 1. ลบจากสต็อกของทุกสาขาก่อนเพื่อป้องกัน Foreign Key Constraint Error
-      const { error: invError } = await supabase
-        .from('branch_inventory')
-        .delete()
-        .eq('product_id', id);
-      if (invError) throw invError;
-
-      // 2. ซ่อนสินค้า (Soft Delete) แทนการลบออกจากตาราง products หลัก
-      const { error } = await supabase
-        .from('products')
-        .update({ is_active: false })
-        .eq('id', id);
-        
-      if (error) throw error;
-      
-      alert('ลบสินค้าสำเร็จ');
-      setProducts(products.filter(p => p.id !== id));
+      const { data: existing } = await supabase.from('branch_inventory').select('id').eq('branch_id', branchId).eq('product_id', productId).maybeSingle();
+      if (existing) {
+        const { error } = await supabase.from('branch_inventory').update({ status: nextStatus }).eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('branch_inventory').insert({ branch_id: branchId, product_id: productId, stock_count: 0, status: nextStatus });
+        if (error) throw error;
+      }
+      toast.success(nextStatus === 1 ? 'เปิดขายที่สาขานี้แล้ว' : 'ปิดการขายที่สาขานี้แล้ว');
     } catch (error: any) {
-      console.error('Error deleting product:', error.message);
-      alert(`ไม่สามารถลบสินค้าได้ เนื่องจากอาจมีข้อมูลผูกอยู่กับสาขาหรือออเดอร์`);
+      console.error('Error toggling branch status:', error);
+      toast.error(`เกิดข้อผิดพลาด: ${error.message}`);
+      fetchProducts(); // Rollback กลับถ้าเซฟไม่สำเร็จ
     }
   };
 
@@ -292,6 +331,7 @@ export default function SuperAdminProductsPage() {
       const unit = units.find(u => u.id === p.unit_id);
       return {
         ID: p.id,
+        SKU: p.sku || '',
         Name: p.name,
         Description: p.description || '',
         Price: p.price,
@@ -312,6 +352,7 @@ export default function SuperAdminProductsPage() {
     const ws = XLSX.utils.json_to_sheet([
       { 
         ID: '', // ปล่อยว่างเพื่อเพิ่มสินค้าใหม่
+        SKU: 'SKU-001',
         Name: 'ชื่อสินค้าตัวอย่าง', 
         Description: 'รายละเอียดสินค้า', 
         Price: 150.50, 
@@ -373,6 +414,7 @@ export default function SuperAdminProductsPage() {
       const rowNum = i + 2; // +2 เพราะ index เริ่ม 0 และมี Header ในแถวแรก
 
       const id = row.ID ? String(row.ID).trim() : null;
+      const sku = row.SKU ? String(row.SKU).trim() : null;
 
       if (!id && (!row.Name || String(row.Name).trim() === '')) {
         errors.push(`แถวที่ ${rowNum}: ข้อมูล "ชื่อสินค้า" ห้ามว่าง (สำหรับการเพิ่มใหม่)`);
@@ -416,6 +458,7 @@ export default function SuperAdminProductsPage() {
         }
         productsToUpdate.push({
           id: id,
+          sku: row.SKU !== undefined ? sku : existing.sku,
           name: row.Name !== undefined ? String(row.Name).trim() : existing.name,
           description: row.Description !== undefined ? String(row.Description).trim() : existing.description,
           price: row.Price !== undefined ? Number(row.Price) : existing.price,
@@ -428,6 +471,7 @@ export default function SuperAdminProductsPage() {
         // โหมดเพิ่มข้อมูลใหม่ (Insert)
         const initialStock = isNaN(Number(row.Initial_Stock_Per_Branch)) ? 0 : Number(row.Initial_Stock_Per_Branch);
         productsToInsert.push({
+          sku: sku,
           name: String(row.Name).trim(),
           description: row.Description ? String(row.Description).trim() : null,
           price: Number(row.Price),
@@ -544,7 +588,7 @@ export default function SuperAdminProductsPage() {
       // 4. Proceed with processing the file or show remaining errors
       if (importErrors.length > 0) {
         setIsImporting(false);
-        alert('สร้าง Master Data สำเร็จ กรุณาแก้ไขข้อผิดพลาดอื่นๆ ในไฟล์และอัปโหลดใหม่อีกครั้ง');
+        toast.success('สร้าง Master Data สำเร็จ กรุณาแก้ไขข้อผิดพลาดอื่นๆ ในไฟล์และอัปโหลดใหม่อีกครั้ง');
       } else {
         await processFileData(pendingFileData, newCatData || categories, newUnitData || units);
       }
@@ -563,9 +607,67 @@ export default function SuperAdminProductsPage() {
     setPendingFileData(null);
   };
 
-  const filteredProducts = selectedCategory
-    ? products.filter(p => p.category_id === selectedCategory)
-    : products;
+  // Process Data: Filter -> Sort -> Paginate
+  const processedProducts = React.useMemo(() => {
+    let result = products;
+
+    // 1. Filter by Category
+    if (selectedCategory) {
+      const childIds = categories.filter(c => c.parent_id === selectedCategory).map(c => c.id);
+      result = result.filter(p => p.category_id === selectedCategory || (p.category_id !== null && childIds.includes(p.category_id)));
+    }
+
+    // 2. Filter by Search Query
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(p => 
+        p.name.toLowerCase().includes(lowerQuery) ||
+        (p.sku && p.sku.toLowerCase().includes(lowerQuery)) ||
+        (p.description && p.description.toLowerCase().includes(lowerQuery))
+      );
+    }
+
+    // 3. Sort
+    if (sortConfig) {
+      result = [...result].sort((a, b) => {
+        const aVal = a[sortConfig.key];
+        const bVal = b[sortConfig.key];
+        
+        // Handle null/undefined values
+        if (aVal === null || aVal === undefined) return sortConfig.direction === 'asc' ? 1 : -1;
+        if (bVal === null || bVal === undefined) return sortConfig.direction === 'asc' ? -1 : 1;
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [products, selectedCategory, searchQuery, sortConfig, categories]);
+
+  const totalItems = processedProducts.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedProducts = processedProducts.slice(startIndex, startIndex + itemsPerPage);
+
+  const handleSort = (key: keyof Product) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof Product) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="w-4 h-4 ml-1 inline-block text-gray-400 opacity-50 group-hover:opacity-100 transition-opacity" />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp className="w-4 h-4 ml-1 inline-block text-blue-600" />;
+    }
+    return <ArrowDown className="w-4 h-4 ml-1 inline-block text-blue-600" />;
+  };
 
   // ฟังก์ชันแยกหมวดหมู่หลักและย่อย
   const rootCategories = categories.filter(c => !c.parent_id);
@@ -608,34 +710,43 @@ export default function SuperAdminProductsPage() {
         </div>
       </div>
 
-      {/* Category Tabs */}
-      {categories.length > 0 && (
-        <div className="flex overflow-x-auto gap-3 pb-4 mb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <button
-            onClick={() => setSelectedCategory(null)}
-            className={`flex-shrink-0 px-6 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
-              selectedCategory === null
-                ? 'bg-slate-800 text-white border-slate-800 shadow-md'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800'
-            }`}
-          >
-            ทั้งหมด
-          </button>
-          {orderedCategories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`flex-shrink-0 px-6 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
-                selectedCategory === cat.id
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700'
-            }`}
-          >
-            {cat.parent_id ? `↳ ${cat.name}` : cat.name}
-          </button>
-          ))}
+      {/* Toolbar: Categories & Search */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+        {/* Category Dropdown */}
+        {categories.length > 0 && (
+          <div className="w-full sm:w-64 shrink-0">
+            <select
+              title="กรองตามหมวดหมู่สินค้า"
+              value={selectedCategory || ''}
+              onChange={(e) => { setSelectedCategory(e.target.value || null); setCurrentPage(1); }}
+              className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow cursor-pointer appearance-none"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: `right 1rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.2em 1.2em`, paddingRight: `2.5rem` }}
+            >
+              <option value="">ทั้งหมด (ทุกหมวดหมู่)</option>
+              {rootCategories.map(cat => (
+                <React.Fragment key={cat.id}>
+                  <option value={cat.id} className="font-semibold text-gray-900">{cat.name}</option>
+                  {getChildren(cat.id).map(child => (
+                    <option key={child.id} value={child.id}>&nbsp;&nbsp;&nbsp;↳ {child.name}</option>
+                  ))}
+                </React.Fragment>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Search Input */}
+        <div className="relative w-full sm:max-w-xs lg:w-80 sm:ml-auto shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="ค้นหาชื่อ, รหัสสินค้า, รายละเอียด..."
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+          />
         </div>
-      )}
+      </div>
 
       {/* Products Table/Grid */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -644,8 +755,13 @@ export default function SuperAdminProductsPage() {
             <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="px-6 py-4 w-20 text-center">รูปภาพ</th>
-                <th className="px-6 py-4">ข้อมูลสินค้า</th>
-                <th className="px-6 py-4 text-right">ราคา (บาท)</th>
+                <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 group select-none transition-colors" onClick={() => handleSort('name')}>
+                  ข้อมูลสินค้า {getSortIcon('name')}
+                </th>
+                <th className="px-6 py-4 text-right cursor-pointer hover:bg-gray-100 group select-none transition-colors" onClick={() => handleSort('price')}>
+                  ราคา (บาท) {getSortIcon('price')}
+                </th>
+                <th className="px-6 py-4 text-center">สถานะการขาย</th>
                 <th className="px-6 py-4 text-center">จัดการ</th>
               </tr>
             </thead>
@@ -664,6 +780,9 @@ export default function SuperAdminProductsPage() {
                       <div className="h-4 bg-gray-200 rounded-md w-16 animate-pulse"></div>
                     </td>
                     <td className="px-6 py-4 text-center">
+                      <div className="h-6 bg-gray-200 rounded-full w-20 mx-auto animate-pulse"></div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-2">
                         <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
                         <div className="w-8 h-8 bg-gray-200 rounded-lg animate-pulse"></div>
@@ -671,9 +790,9 @@ export default function SuperAdminProductsPage() {
                     </td>
                   </tr>
                 ))
-              ) : filteredProducts.length === 0 ? (
+              ) : paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="text-center py-12 text-gray-500">
+                  <td colSpan={5} className="text-center py-12 text-gray-500">
                     <div className="flex flex-col items-center justify-center">
                       <Package className="w-12 h-12 text-gray-300 mb-2" />
                       <p>ยังไม่มีข้อมูลสินค้าในระบบ</p>
@@ -681,7 +800,7 @@ export default function SuperAdminProductsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => (
+                paginatedProducts.map((product) => (
                   <tr key={product.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 text-center">
                       <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center mx-auto">
@@ -694,20 +813,45 @@ export default function SuperAdminProductsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-bold text-gray-900">{product.name}</p>
+                      {product.sku && <p className="text-xs text-blue-600 font-mono mt-0.5">รหัส: {product.sku}</p>}
                       <p className="text-xs text-gray-500 line-clamp-1 mt-1">{product.description || '-'}</p>
                     </td>
                     <td className="px-6 py-4 text-right font-semibold text-blue-600">
                       ฿{product.price.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-center">
+                      <button 
+                        onClick={() => setBranchStatusModal({ isOpen: true, product })}
+                        className="focus:outline-none hover:scale-105 active:scale-95 transition-transform"
+                        title="คลิกเพื่อดูรายละเอียดแต่ละสาขา"
+                      >
+                        {(() => {
+                          const inventory = product.branch_inventory || [];
+                          const totalBranches = branches.length > 0 ? branches.length : inventory.length;
+                          const activeCount = inventory.filter(inv => inv.status === 1).length;
+                          
+                          if (totalBranches === 0 && inventory.length === 0) {
+                            return <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-medium shadow-sm block">ไม่มีข้อมูล</span>;
+                          }
+                          if (activeCount === 0) {
+                            return <span className="text-xs px-2.5 py-1 rounded-full bg-red-100 text-red-700 font-medium border border-red-200 shadow-sm block">ปิดขายทุกสาขา</span>;
+                          }
+                          if (activeCount === totalBranches) {
+                            return <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium border border-emerald-200 shadow-sm block">เปิดขายทุกสาขา</span>;
+                          }
+                          return <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-medium border border-blue-200 shadow-sm block">เปิดขาย {activeCount}/{totalBranches} สาขา</span>;
+                        })()}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-2">
-                        <button onClick={() => handleDisableGlobally(product.id, product.name)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="ระงับการขายทุกสาขา">
+                        <button onClick={() => setConfirmModal({ isOpen: true, action: 'disable', id: product.id, name: product.name })} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="ระงับการขายทุกสาขา">
                           <PowerOff className="w-4 h-4" />
                         </button>
                         <button onClick={() => openModal(product)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="แก้ไขสินค้า">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDelete(product.id, product.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบสินค้า">
+                        <button onClick={() => setConfirmModal({ isOpen: true, action: 'delete', id: product.id, name: product.name })} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบสินค้า">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -718,6 +862,134 @@ export default function SuperAdminProductsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {!loading && totalItems > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-gray-100 bg-white gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-3 text-sm text-gray-500 w-full sm:w-auto text-center sm:text-left">
+              <div className="flex items-center gap-2">
+                <span>แสดง</span>
+                <select
+                  title="จำนวนรายการต่อหน้า"
+                  value={itemsPerPage}
+                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  className="border border-gray-300 rounded-md px-2 py-1 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>รายการต่อหน้า</span>
+              </div>
+              <span className="hidden sm:inline-block border-l border-gray-300 h-4 mx-1"></span>
+              <span>
+                แสดง {startIndex + 1} ถึง {Math.min(startIndex + itemsPerPage, totalItems)} จากทั้งหมด {totalItems} รายการ
+              </span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="หน้าแรก"><ChevronsLeft className="w-5 h-5" /></button>
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="หน้าก่อนหน้า"><ChevronLeft className="w-5 h-5" /></button>
+              <span className="px-4 py-1.5 text-sm font-semibold text-gray-700 bg-gray-50 rounded-lg">หน้า {currentPage} / {totalPages}</span>
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="หน้าถัดไป"><ChevronRight className="w-5 h-5" /></button>
+              <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" title="หน้าสุดท้าย"><ChevronsRight className="w-5 h-5" /></button>
+            </div>
+          </div>
+        )}
+
+      {/* Confirm Action Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 flex flex-col items-center text-center">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${confirmModal.action === 'delete' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                {confirmModal.action === 'delete' ? <Trash2 className="w-8 h-8" /> : <PowerOff className="w-8 h-8" />}
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                {confirmModal.action === 'delete' ? 'ยืนยันการลบสินค้า?' : 'ระงับการขายทุกสาขา?'}
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                {confirmModal.action === 'delete' ? (
+                  <>คุณแน่ใจหรือไม่ว่าต้องการลบสินค้า <span className="font-semibold text-gray-800">"{confirmModal.name}"</span> ?<br />ข้อมูลสต็อกที่ผูกกับสาขาต่างๆ จะถูกลบทิ้งทั้งหมดและไม่สามารถกู้คืนได้</>
+                ) : (
+                  <>ยืนยันการระงับการขายสินค้า <span className="font-semibold text-gray-800">"{confirmModal.name}"</span> ในทุกสาขาใช่หรือไม่? สถานะสินค้าในทุกสาขาจะถูกเปลี่ยนเป็นปิดการขายทันที</>
+                )}
+              </p>
+              
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setConfirmModal({ isOpen: false, action: null, id: '', name: '' })}
+                  disabled={isProcessingAction}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={executeConfirmAction}
+                  disabled={isProcessingAction}
+                  className={`flex-1 px-4 py-2.5 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 ${
+                    confirmModal.action === 'delete' 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-orange-600 hover:bg-orange-700 text-white'
+                  }`}
+                >
+                  {isProcessingAction ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> กำลังดำเนินการ...</>
+                  ) : (
+                    <>{confirmModal.action === 'delete' ? 'ลบสินค้า' : 'ระงับการขาย'}</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Branch Status Modal */}
+      {branchStatusModal.isOpen && branchStatusModal.product && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <h3 className="font-bold text-gray-800 text-lg line-clamp-1 flex-1 pr-4" title={branchStatusModal.product.name}>
+                สถานะ: {branchStatusModal.product.name}
+              </h3>
+              <button onClick={() => setBranchStatusModal({ isOpen: false, product: null })} className="text-gray-400 hover:text-gray-600 transition-colors p-1 bg-white rounded-md hover:bg-gray-100" title="ปิดหน้าต่าง">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+              {branches.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">ไม่มีข้อมูลสาขาในระบบ</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {branches.map(branch => {
+                    const inventory = branchStatusModal.product!.branch_inventory || [];
+                    const branchInv = inventory.find(inv => inv.branch_id === branch.id);
+                    const isActive = branchInv && branchInv.status === 1;
+
+                    return (
+                      <li key={branch.id} className="flex justify-between items-center p-3.5 rounded-xl border border-gray-100 bg-white shadow-sm">
+                        <span className="font-medium text-gray-700 flex items-center gap-2">{branch.name}</span>
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full border ${isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                          {isActive ? '🟢 เปิดขาย' : '🔴 ปิดขาย'}
+                        </span>
+                        <label className="flex items-center cursor-pointer gap-2">
+                          <div className="relative">
+                            <input type="checkbox" className="sr-only" checked={isActive} onChange={() => handleToggleBranchStatus(branchStatusModal.product!.id, branch.id, isActive ? 1 : 0)} />
+                            <div className={`block w-10 h-6 rounded-full transition-colors ${isActive ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                            <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${isActive ? 'transform translate-x-4' : ''}`}></div>
+                          </div>
+                          <span className={`text-xs font-bold w-16 text-right ${isActive ? 'text-emerald-600' : 'text-gray-500'}`}>{isActive ? 'เปิดขาย' : 'ปิดการขาย'}</span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Product Modal */}
@@ -732,7 +1004,16 @@ export default function SuperAdminProductsPage() {
             </div>
             
             <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-grow flex flex-col gap-4">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">ชื่อสินค้า <span className="text-red-500">*</span></label><input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น น้ำดื่มขวด 1.5 ลิตร" /></div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">รหัสสินค้า (SKU)</label>
+                  <input type="text" value={formData.sku} onChange={(e) => setFormData({...formData, sku: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น SKU-001" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อสินค้า <span className="text-red-500">*</span></label>
+                  <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น น้ำดื่มขวด 1.5 ลิตร" />
+                </div>
+              </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">รายละเอียด</label><textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="คำอธิบายสินค้า..." /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">ราคา (บาท) <span className="text-red-500">*</span></label><input required type="number" step="0.01" min="0" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น 15.50" /></div>
               

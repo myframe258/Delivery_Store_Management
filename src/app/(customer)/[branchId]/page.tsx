@@ -4,6 +4,7 @@ import Link from 'next/link';
 import BranchGuard from '@/components/utilities/BranchGuard';
 import StorefrontClient from './StorefrontClient';
 import { MapPin, Phone, ShoppingBag, CheckCircle2 } from 'lucide-react';
+import { unstable_cache } from 'next/cache';
 
 export const dynamic = 'force-dynamic'; // เพิ่มบรรทัดนี้เพื่อบังคับให้ Next.js ดึงข้อมูลใหม่เสมอ ไม่จำ Cache โบราณ
 
@@ -30,6 +31,73 @@ type InventoryRecord = {
   products: ProductRecord | ProductRecord[] | null;
 };
 
+// --- Caching Functions ---
+
+// 1. Cache ข้อมูลสาขา (3600 วินาที / 1 ชั่วโมง)
+const getCachedBranch = unstable_cache(
+  async (branchId: string) => {
+    const supabase = await createClient();
+    return await supabase
+      .from('branches')
+      .select('id, name, address, phone')
+      .eq('id', branchId)
+      .single();
+  },
+  ['branch-data'], 
+  { revalidate: 3600, tags: ['branches'] }
+);
+
+// 2. Cache ข้อมูลหมวดหมู่สินค้า (3600 วินาที / 1 ชั่วโมง)
+const getCachedCategories = unstable_cache(
+  async () => {
+    const supabase = await createClient();
+    return await supabase
+      .from('categories')
+      .select('id, name, parent_id')
+      .order('sort_order', { ascending: true });
+  },
+  ['categories-data'],
+  { revalidate: 3600, tags: ['categories'] }
+);
+
+// 3. Cache ข้อมูลโปรโมชัน (3600 วินาที / 1 ชั่วโมง)
+const getCachedPromotions = unstable_cache(
+  async (branchId: string) => {
+    const supabase = await createClient();
+    return await supabase
+      .from('branch_promotions')
+      .select('id, title, image_url, target_url')
+      .or(`branch_id.eq.${branchId},branch_id.is.null`)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+  },
+  ['promotions-data'],
+  { revalidate: 3600, tags: ['promotions'] }
+);
+
+// 4. Cache สต็อกสินค้าและรายละเอียดสินค้า (60 วินาที / เพื่ออัปเดตสต็อกใกล้เคียง Real-time แต่ไม่ให้ DB พัง)
+const getCachedInventory = unstable_cache(
+  async (branchId: string) => {
+    const supabase = await createClient();
+    return await supabase
+      .from('branch_inventory')
+      .select(`
+        stock_count,
+        status,
+        discount_price,
+        discount_end_date,
+        products!inner (
+          id, name, description, price, image_url, category_id, is_track_stock,
+          product_units (name, step_value, min_value)
+        )
+      `)
+      .eq('branch_id', branchId)
+      .neq('status', 0);
+  },
+  ['inventory-data'],
+  { revalidate: 60, tags: ['inventory'] }
+);
+
 export default async function BranchStorefrontPage({
   params,
 }: {
@@ -37,14 +105,9 @@ export default async function BranchStorefrontPage({
 }) {
   const resolvedParams = await params;
   const branchId = resolvedParams.branchId as string;
-  const supabase = await createClient();
 
   // 1. ดึงข้อมูลสาขา เพื่อใช้แสดงหัวเว็บ
-  const { data: branch, error: branchError } = await supabase
-    .from('branches')
-    .select('id, name, address, phone')
-    .eq('id', branchId)
-    .single();
+  const { data: branch, error: branchError } = await getCachedBranch(branchId);
 
   if (branchError || !branch) {
     // หากไม่พบสาขา ให้แสดงหน้า 404 Not Found
@@ -52,44 +115,13 @@ export default async function BranchStorefrontPage({
   }
 
   // 2. ดึงสินค้าที่มีในสต็อกของสาขานี้ (JOIN branch_inventory กับ products)
-  const { data: inventory, error: inventoryError } = await supabase
-    .from('branch_inventory')
-    .select(`
-      stock_count,
-      status,
-      discount_price,
-      discount_end_date,
-      products!inner (
-        id,
-        name,
-        description,
-        price,
-        image_url,
-        category_id,
-        is_track_stock,
-        product_units (
-          name,
-          step_value,
-          min_value
-        )
-      )
-    `)
-    .eq('branch_id', branchId)
-    .neq('status', 0); // ดึงเฉพาะสินค้าที่สถานะไม่ใช่ out_of_stock
+  const { data: inventory } = await getCachedInventory(branchId);
 
   // 3. ดึงข้อมูลประเภทสินค้า (Categories) เพื่อสร้าง Tabs เมนู
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('id, name, parent_id')
-    .order('sort_order', { ascending: true });
+  const { data: categories } = await getCachedCategories();
 
   // 4. ดึงข้อมูลแบนเนอร์โปรโมชัน (is_active = true)
-  const { data: promotions } = await supabase
-    .from('branch_promotions')
-    .select('id, title, image_url, target_url')
-    .or(`branch_id.eq.${branchId},branch_id.is.null`)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true });
+  const { data: promotions } = await getCachedPromotions(branchId);
 
   // แปลงข้อมูลให้อ่านง่ายขึ้น
   const products = (inventory as InventoryRecord[] | null)?.map((item) => {

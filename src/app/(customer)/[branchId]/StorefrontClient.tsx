@@ -348,7 +348,8 @@ export default function StorefrontClient({ products, categories, branchId, promo
             <a
               key={promo.id}
               href={promo.target_url || '#'}
-              target={promo.target_url ? "_blank" : "_self"}
+              target={promo.target_url ? "_blank" : undefined}
+              rel={promo.target_url ? "noopener noreferrer" : undefined}
               className={`absolute inset-0 transition-opacity duration-1000 ${index === currentBanner ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
               onClick={(e) => { if (!promo.target_url) e.preventDefault(); }}
             >

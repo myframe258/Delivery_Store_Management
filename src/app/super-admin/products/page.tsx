@@ -366,8 +366,9 @@ export default function SuperAdminProductsPage() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const arrayBuffer = evt.target?.result;
+        // เปลี่ยนจาก 'binary' เป็น 'array' เพื่อรองรับไฟล์ .csv (UTF-8) ป้องกันภาษาไทยเพี้ยน
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
@@ -382,7 +383,8 @@ export default function SuperAdminProductsPage() {
         e.target.value = ''; // Reset file input
       }
     };
-    reader.readAsBinaryString(file);
+    // อ่านไฟล์เป็น ArrayBuffer แทน BinaryString เพื่อรองรับ Encoding ของ .csv ได้อย่างสมบูรณ์
+    reader.readAsArrayBuffer(file);
   };
 
   const processFileData = async (data: any[], currentCategories: any[], currentUnits: any[]) => {

@@ -1,6 +1,6 @@
-# Product Requirements Document (PRD) - Version 4 (MVP Ready Draft)
+# Product Requirements Document (PRD) - Version 5 (Phase 2 In-Progress)
 **Project Name:** Multi-Branch Store & Batch Delivery Management System  
-**Document Status:** MVP Ready Draft
+**Document Status:** Phase 2 In-Progress
 
 ---
 
@@ -49,24 +49,29 @@
 ### 4.3 สำหรับคนขับ (Rider Interface)
 - **[Done 100%] Rider Flow:** หน้าจอ Mobile-friendly สำหรับคนขับ, ดูคิวงาน (Sequence), ปุ่มกดนำทาง Google Maps, และอัปเดตสถานะการส่งสำเร็จ
 
+### 4.4 สำหรับ Super Admin และความปลอดภัย (Security & Master Data)
+- **[Done 100%] Super Admin Master Data & Security:** สร้างหน้าจัดการสาขา/ผู้ใช้งาน และบังคับใช้ Row Level Security (RLS) ล็อกสิทธิ์การเข้าถึงข้อมูลระดับสาขา
+
+### 4.5 ระบบชำระเงินและการแจ้งเตือน (Payments & Notifications)
+- **[Done 100%] Payment Gateway Integration:** เชื่อมต่อระบบชำระเงิน (Omise/Stripe) รองรับ PromptPay QR และ Credit Card ลดการตรวจสลิปแบบ Manual
+- **[Done 100%] Customer Notifications:** เชื่อมต่อ Line Messaging API / SMS ส่งแจ้งเตือนสถานะออเดอร์แบบ Real-time ให้ลูกค้า
 
 
 ## 5. แผนการพัฒนาใน Sprint ถัดไป (Next Sprints & Future Roadmap)
 หลังจากระบบ Core Flow ของ MVP เสร็จสมบูรณ์ แผนการพัฒนาถัดไปจะมุ่งเน้นไปที่การสร้างรายได้ (Business Value), ความปลอดภัย, และการขยายระบบ (Scalability)
 
 ### Sprint N+1 (High Priority / Quick Wins)
-- **Payment Gateway Integration:** เชื่อมต่อระบบชำระเงิน (Omise/Stripe) รองรับ PromptPay QR และ Credit Card ลดการตรวจสลิปแบบ Manual
-- **Customer Notifications:** เชื่อมต่อ Line Messaging API / SMS ส่งแจ้งเตือนสถานะออเดอร์แบบ Real-time ให้ลูกค้า
-- **Super Admin Master Data & Security:** สร้างหน้าจัดการสาขา/ผู้ใช้งาน และบังคับใช้ Row Level Security (RLS) ล็อกสิทธิ์การเข้าถึงข้อมูลระดับสาขา
-
-### Sprint N+2 (Medium Priority / Scale-up)
 - **Proof of Delivery & Rider Payouts:** ให้คนขับอัปโหลดรูปถ่ายหลักฐานการจัดส่งลง Supabase Storage พร้อมระบบคำนวณค่ารอบจัดส่งอัตโนมัติ
 - **Centralized Analytics Dashboard:** แดชบอร์ดสรุปยอดขายแยกตามสาขาและสินค้าขายดี สำหรับผู้บริหาร
 - **Redis Caching:** แคชข้อมูลแคตตาล็อกสินค้าและ Geofencing ด้วย Vercel KV/Redis ลดภาระ Database Read
 
-### Future Roadmap (Long-term Vision)
+### Sprint N+2 (Medium Priority / Scale-up)
 - **Auto-Replenishment & Transfer:** ระบบแนะนำการโยกย้ายสต็อกข้ามสาขา และแจ้งเตือนสั่งของจากคลังอัตโนมัติ
 - **AI-Powered Upselling & Forecasting:** ใช้ AI วิเคราะห์พฤติกรรมการซื้อเพื่อแนะนำสินค้าที่เกี่ยวข้อง และคาดการณ์จำนวนคนขับที่ต้องการในช่วง Peak Time
+
+### Future Roadmap (Long-term Vision)
+- **Customer Loyalty & Rewards:** ระบบสะสมแต้มสำหรับลูกค้าและการสร้างแคมเปญการตลาดระดับสาขา
+- **Multi-Vehicle Routing:** รองรับการจัดเส้นทางแบบผสมผสานยานพาหนะ (เช่น รถมอเตอร์ไซค์, รถกระบะ) ตามขนาดหรือน้ำหนักของออเดอร์รวมใน Batch
 
 ## 6. เครื่องมือทางเทคนิค (Technical Stack)
 - **Framework:** Next.js 16 (App Router)

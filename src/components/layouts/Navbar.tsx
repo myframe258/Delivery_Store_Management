@@ -20,6 +20,14 @@ export default function Navbar() {
   const cartItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const activeBranchId = useBranchStore((state) => state.activeBranchId);
 
+  // 🌟 ตั้งค่าแบรนด์ของลูกค้า (โลโก้ และ สี) ตรงนี้เพื่อให้เปลี่ยนง่ายๆ สำหรับแต่ละโปรเจกต์
+  const BRAND_CONFIG = {
+    name: 'หมูวรรรณา ', // เปลี่ยนชื่อร้านที่นี่
+    colorClass: '',   // ใช้สีหลักที่กำหนดใน tailwind.config.ts
+    Icon: MapPin,                  // เปลี่ยนไอคอนที่นี่ (จาก lucide-react)
+    logoImageUrl: '/logo.png'   // [ตัวเลือกเสริม] หากมีไฟล์รูปโลโก้ สามารถนำมาใช้แทน Icon ได้
+  };
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -65,9 +73,13 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto w-full px-4 md:px-8 flex justify-between items-center text-slate-800">
 
         {/* Logo / หน้าหลัก */}
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl text-blue-600 hover:opacity-80 transition">
-          <MapPin className="w-6 h-6" />
-          <span className="hidden sm:inline-block">BatchDelivery</span>
+        <Link href="/" className={`flex items-center gap-2 font-bold text-xl ${BRAND_CONFIG.colorClass} hover:opacity-80 transition`}>
+          {BRAND_CONFIG.logoImageUrl ? (
+            <img src={BRAND_CONFIG.logoImageUrl} alt={BRAND_CONFIG.name} className="h-12 w-auto object-contain" />
+          ) : (
+            <BRAND_CONFIG.Icon className="w-8 h-8" />
+          )}
+          <span className="hidden sm:inline-block">{BRAND_CONFIG.name}</span>
         </Link>
 
         {/* เมนูตรงกลาง (แสดงตาม Role) */}
@@ -80,7 +92,7 @@ export default function Navbar() {
                 <Settings className="w-4 h-4" /> จัดการระบบ <ChevronDown className="w-3 h-3" />
               </button>
               <div className="absolute top-full left-0 mt-0 w-64 bg-white border border-gray-100 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden flex flex-col py-2 z-50">
-                
+
                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">ร้านค้าและพนักงาน</div>
                 <Link href="/super-admin/branches" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
                   <Store className="w-4 h-4" /> ข้อมูลสาขา
@@ -88,7 +100,7 @@ export default function Navbar() {
                 <Link href="/super-admin/users" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
                   <User className="w-4 h-4" /> สิทธิ์ผู้ใช้งาน
                 </Link>
-                
+
                 <div className="w-full h-px bg-gray-100 my-1"></div>
                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">สินค้าและโปรโมชัน</div>
                 <Link href="/super-admin/products" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
@@ -100,7 +112,7 @@ export default function Navbar() {
                 <Link href="/super-admin/promotions" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
                   <Megaphone className="w-4 h-4" /> แบนเนอร์โปรโมชัน
                 </Link>
-                
+
                 <div className="w-full h-px bg-gray-100 my-1"></div>
                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">ตั้งค่าพื้นฐาน</div>
                 <Link href="/super-admin/categories" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
@@ -117,36 +129,36 @@ export default function Navbar() {
           )}
 
           {role === 'branch_admin' && (
-             <div className="relative group h-full flex items-center">
-               <button className="flex items-center gap-1 hover:text-blue-600 transition py-2">
-                 <Store className="w-4 h-4" /> จัดการสาขา <ChevronDown className="w-3 h-3" />
-               </button>
-               <div className="absolute top-full left-0 mt-0 w-56 bg-white border border-gray-100 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden flex flex-col py-2 z-50">
-                 
-                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">คลังสินค้า</div>
-                 <Link href="/branch-admin/inventory" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
-                   <Package className="w-4 h-4" /> จัดการสต็อกสินค้า
-                 </Link>
-                 
-                 <div className="w-full h-px bg-gray-100 my-1"></div>
-                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">จัดการออเดอร์</div>
-                 <Link href="/picker/dashboard" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
-                   <Package className="w-4 h-4" /> งานจัดของ
-                 </Link>
-                 <Link href="/branch-admin/batching" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
-                   <MapIcon className="w-4 h-4" /> จัดรอบส่งสินค้า
-                 </Link>
-                 
-                 <div className="w-full h-px bg-gray-100 my-1"></div>
-                 <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">พนักงานจัดส่ง / นัดรับ</div>
-                 <Link href="/picker/pickups" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
-                   <Store className="w-4 h-4" /> ออเดอร์นัดรับที่ร้าน
-                 </Link>
-                 <Link href="/rider/batches" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
-                   <Truck className="w-4 h-4" /> หน้าจอคนขับ (Rider)
-                 </Link>
-               </div>
-             </div>
+            <div className="relative group h-full flex items-center">
+              <button className="flex items-center gap-1 hover:text-blue-600 transition py-2">
+                <Store className="w-4 h-4" /> จัดการสาขา <ChevronDown className="w-3 h-3" />
+              </button>
+              <div className="absolute top-full left-0 mt-0 w-56 bg-white border border-gray-100 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 overflow-hidden flex flex-col py-2 z-50">
+
+                <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">คลังสินค้า</div>
+                <Link href="/branch-admin/inventory" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Package className="w-4 h-4" /> จัดการสต็อกสินค้า
+                </Link>
+
+                <div className="w-full h-px bg-gray-100 my-1"></div>
+                <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">จัดการออเดอร์</div>
+                <Link href="/picker/dashboard" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Package className="w-4 h-4" /> งานจัดของ
+                </Link>
+                <Link href="/branch-admin/batching" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <MapIcon className="w-4 h-4" /> จัดรอบส่งสินค้า
+                </Link>
+
+                <div className="w-full h-px bg-gray-100 my-1"></div>
+                <div className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">พนักงานจัดส่ง / นัดรับ</div>
+                <Link href="/picker/pickups" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Store className="w-4 h-4" /> ออเดอร์นัดรับที่ร้าน
+                </Link>
+                <Link href="/rider/batches" className="px-4 py-2.5 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 hover:text-blue-700 transition-colors">
+                  <Truck className="w-4 h-4" /> หน้าจอคนขับ (Rider)
+                </Link>
+              </div>
+            </div>
           )}
 
           {role === 'picker' && (

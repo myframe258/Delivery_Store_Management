@@ -185,10 +185,10 @@ export default function CheckoutPage() {
         setIsPriceValidating(false);
         return;
       }
-      
+
       setIsPriceValidating(true);
       const productIds = items.map((item: any) => item.id);
-      
+
       try {
         const { data, error } = await supabase
           .from('branch_inventory')
@@ -336,13 +336,13 @@ export default function CheckoutPage() {
         },
         (error) => {
           console.warn('Geolocation error:', error);
-              toast.error('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
+          toast.error('ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิดการเข้าถึงพิกัด (GPS)');
           setIsLocating(false);
         },
         { enableHighAccuracy: true }
       );
     } else {
-          toast.error('เบราว์เซอร์ของคุณไม่รองรับการดึงตำแหน่งปัจจุบัน');
+      toast.error('เบราว์เซอร์ของคุณไม่รองรับการดึงตำแหน่งปัจจุบัน');
     }
   };
 
@@ -678,7 +678,11 @@ export default function CheckoutPage() {
               <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'วันที่จัดส่ง' : 'วันที่เข้ารับสินค้า'}</label>
                 <input
-                  type="date"
+                  type={deliveryDate ? "date" : "text"}
+                  onFocus={(e) => (e.target.type = "date")}
+                  onBlur={(e) => {
+                    if (!e.target.value) e.target.type = "text";
+                  }}
                   required
                   title="เลือกวันที่"
                   placeholder="วว/ดด/ปปปป"
@@ -715,7 +719,7 @@ export default function CheckoutPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4 md:mb-6">ข้อมูลผู้ติดต่อ</h2>
 
@@ -907,22 +911,22 @@ export default function CheckoutPage() {
                     </div>
                   )}
                   <label className="block text-sm font-medium text-gray-700 mb-2">แนบสลิปโอนเงิน</label>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
+                  <input
+                    type="file"
+                    accept="image/*"
                     title="เลือกไฟล์สลิปโอนเงิน"
                     placeholder="เลือกไฟล์รูปภาพสลิป"
                     onChange={handleSlipChange}
                     disabled={isCompressing}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   {slipFile ? (
                     <div className="mt-3 relative w-full h-48 border-2 border-dashed border-blue-300 rounded-xl overflow-hidden bg-blue-50/50 flex flex-col items-center justify-center group">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={URL.createObjectURL(slipFile)} alt="Slip preview" className="max-h-full max-w-full object-contain p-2" />
-                      <button 
+                      <button
                         type="button"
-                        onClick={() => setSlipFile(null)} 
+                        onClick={() => setSlipFile(null)}
                         className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm text-red-500 p-2 rounded-full shadow-sm hover:bg-red-50 hover:scale-105 transition-all disabled:opacity-50"
                         title="ลบรูปภาพ"
                         disabled={isCompressing}
@@ -940,10 +944,10 @@ export default function CheckoutPage() {
                         <p className="text-sm text-gray-600 font-medium group-hover:text-blue-600 transition-colors">คลิกเพื่ออัปโหลดสลิป</p>
                         <p className="text-xs text-gray-400 mt-1">รองรับไฟล์ JPG, PNG</p>
                       </div>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
                         onChange={handleSlipChange}
                         disabled={isCompressing}
                       />
@@ -969,62 +973,62 @@ export default function CheckoutPage() {
 
             <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto pr-2 min-h-[100px]">
               {isPriceValidating ? (
-                 <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-                   <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
-                   <p className="text-sm font-medium">กำลังอัปเดตราคาสินค้าล่าสุด...</p>
-                 </div>
+                <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                  <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-500" />
+                  <p className="text-sm font-medium">กำลังอัปเดตราคาสินค้าล่าสุด...</p>
+                </div>
               ) : (
-              effectiveCartItems.map((item: any) => {
-                const step = item.step_value || 1;
-                const min = item.min_value || 1;
-                const displayQuantity = Number.isInteger(item.quantity) ? item.quantity.toString() : item.quantity.toFixed(2).replace(/\.?0+$/, '');
+                effectiveCartItems.map((item: any) => {
+                  const step = item.step_value || 1;
+                  const min = item.min_value || 1;
+                  const displayQuantity = Number.isInteger(item.quantity) ? item.quantity.toString() : item.quantity.toFixed(2).replace(/\.?0+$/, '');
 
-                return (
-                  <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 pr-4">
-                        <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
-                        <div className="text-sm font-semibold mt-1">
-                          {item.isDiscounted ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-red-600">฿{item.currentPrice.toLocaleString()}</span>
-                              <span className="text-xs text-gray-400 line-through">฿{item.originalPrice.toLocaleString()}</span>
-                              {item.unit_name && <span className="text-gray-500 font-normal"> / {item.unit_name}</span>}
-                            </div>
-                          ) : (
-                            <span className="text-blue-600">฿{item.currentPrice.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</span>
-                          )}
+                  return (
+                    <div key={item.id} className="flex flex-col border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 pr-4">
+                          <h3 className="font-medium text-gray-800 line-clamp-2">{item.name}</h3>
+                          <div className="text-sm font-semibold mt-1">
+                            {item.isDiscounted ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-red-600">฿{item.currentPrice.toLocaleString()}</span>
+                                <span className="text-xs text-gray-400 line-through">฿{item.originalPrice.toLocaleString()}</span>
+                                {item.unit_name && <span className="text-gray-500 font-normal"> / {item.unit_name}</span>}
+                              </div>
+                            ) : (
+                              <span className="text-blue-600">฿{item.currentPrice.toLocaleString()}{item.unit_name ? ` / ${item.unit_name}` : ''}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="font-semibold text-gray-800">
+                          ฿{(item.currentPrice * item.quantity).toLocaleString()}
                         </div>
                       </div>
-                      <div className="font-semibold text-gray-800">
-                        ฿{(item.currentPrice * item.quantity).toLocaleString()}
+                      {/* ส่วนควบคุมจำนวนสินค้า */}
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 w-fit">
+                          <button type="button" title="ลดจำนวน" onClick={() => {
+                            const nextQuantity = Number((item.quantity - step).toFixed(2));
+                            if (nextQuantity >= min) {
+                              updateQuantity(item.id, nextQuantity);
+                            } else {
+                              removeItem(item.id);
+                            }
+                          }} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="min-w-[1.5rem] px-1 text-center font-semibold text-sm">{displayQuantity}</span>
+                          <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, Number((item.quantity + step).toFixed(2)))} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium">
+                          <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">ลบ</span>
+                        </button>
                       </div>
                     </div>
-                    {/* ส่วนควบคุมจำนวนสินค้า */}
-                    <div className="flex items-center justify-between mt-3">
-                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 w-fit">
-                        <button type="button" title="ลดจำนวน" onClick={() => {
-                          const nextQuantity = Number((item.quantity - step).toFixed(2));
-                          if (nextQuantity >= min) {
-                            updateQuantity(item.id, nextQuantity);
-                          } else {
-                            removeItem(item.id);
-                          }
-                        }} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="min-w-[1.5rem] px-1 text-center font-semibold text-sm">{displayQuantity}</span>
-                        <button type="button" title="เพิ่มจำนวน" onClick={() => updateQuantity(item.id, Number((item.quantity + step).toFixed(2)))} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm rounded transition-all">
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium">
-                        <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">ลบ</span>
-                      </button>
-                    </div>
-                  </div>
-                )
-              })
+                  )
+                })
               )}
             </div>
 

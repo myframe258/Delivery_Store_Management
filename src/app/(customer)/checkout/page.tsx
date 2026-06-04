@@ -1,5 +1,3 @@
-'use client';
-
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import CheckoutClient from './CheckoutClient';
@@ -7,11 +5,11 @@ import CheckoutClient from './CheckoutClient';
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branchId?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
-  const branchId = params.branchId;
+  const branchId = typeof params?.branchId === 'string' ? params.branchId : undefined;
 
   // 1. ตรวจสอบการ Login ของลูกค้า
   const { data: { user } } = await supabase.auth.getUser();

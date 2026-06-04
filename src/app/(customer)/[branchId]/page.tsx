@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BranchGuard from '@/components/utilities/BranchGuard';
 import StorefrontClient from './StorefrontClient';
-import { MapPin, Phone, ShoppingBag, CheckCircle2, Megaphone, Image as ImageIcon } from 'lucide-react';
+import { MapPin, Phone, ShoppingBag, CheckCircle2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic'; // เพิ่มบรรทัดนี้เพื่อบังคับให้ Next.js ดึงข้อมูลใหม่เสมอ ไม่จำ Cache โบราณ
 
@@ -33,9 +33,10 @@ type InventoryRecord = {
 export default async function BranchStorefrontPage({
   params,
 }: {
-  params: Promise<{ branchId: string }>;
+  params: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { branchId } = await params;
+  const resolvedParams = await params;
+  const branchId = resolvedParams.branchId as string;
   const supabase = await createClient();
 
   // 1. ดึงข้อมูลสาขา เพื่อใช้แสดงหัวเว็บ

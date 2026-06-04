@@ -222,11 +222,9 @@ export default function SuperAdminProductsPage() {
         toast.success('อัปเดตข้อมูลสินค้าสำเร็จ');
       } else {
         // Insert New Product
-        const { data: newProduct, error } = await supabase
+        const { error } = await supabase
           .from('products')
-          .insert([payload])
-          .select('id')
-          .single();
+          .insert([payload]);
           
         if (error) throw error;
 

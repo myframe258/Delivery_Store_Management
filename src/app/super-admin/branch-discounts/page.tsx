@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Search, Tag, Save, AlertCircle, Loader2, Image as ImageIcon, Store, Package } from 'lucide-react';
+import { Search, Save, AlertCircle, Loader2, Image as ImageIcon, Store, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Branch = {

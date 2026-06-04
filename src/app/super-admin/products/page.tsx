@@ -229,22 +229,8 @@ export default function SuperAdminProductsPage() {
           .single();
           
         if (error) throw error;
-        
-        // ดึงรายชื่อสาขาทั้งหมดเพื่อเพิ่มสินค้านี้ลงไปในสต็อกตั้งต้น
-        const { data: branches } = await supabase.from('branches').select('id');
-        
-        if (branches && branches.length > 0 && newProduct) {
-          const inventoryPayload = branches.map((b) => ({
-            branch_id: b.id,
-            product_id: newProduct.id,
-            stock_count: 0,
-            status: 0 // 0 = Inactive ปิดการขายไว้เป็นค่าเริ่มต้น ให้แอดมินสาขามาเปิดเอง
-          }));
-          
-          await supabase.from('branch_inventory').insert(inventoryPayload);
-        }
 
-        toast.success('เพิ่มสินค้าใหม่และอัปเดตรายชื่อไปยังทุกสาขาสำเร็จ');
+        toast.success('เพิ่มสินค้าใหม่สำเร็จ');
       }
 
       closeModal();
@@ -525,18 +511,21 @@ export default function SuperAdminProductsPage() {
 
         if (insertError) throw insertError;
 
-        if (insertedProducts && branches.length > 0) {
-          const inventoryPayload = insertedProducts.flatMap((insertedProduct, index) => {
-            const initialStock = productsToInsert[index]._initialStock;
-            return branches.map(branch => ({
-              branch_id: branch.id,
-              product_id: insertedProduct.id,
-              stock_count: initialStock,
-              status: initialStock > 0 ? 1 : 0
-            }));
-          });
-          const { error: invError } = await supabase.from('branch_inventory').insert(inventoryPayload);
-          if (invError) console.error("Inventory Insert Error:", invError.message);
+          // หากในไฟล์ Excel มีการระบุสต็อกตั้งต้น (initialStock) ที่มากกว่า 0 
+          // เราจะทำการ Upsert ทับข้อมูลสต็อกที่ Database Trigger เพิ่งสร้างให้
+          const productsWithInitialStock = productsToInsert.map((p, i) => ({ id: insertedProducts?.[i]?.id, stock: p._initialStock })).filter(p => p.stock > 0);
+          
+          if (productsWithInitialStock.length > 0 && branches.length > 0) {
+            const inventoryUpdates = productsWithInitialStock.flatMap(product => {
+              return branches.map(branch => ({
+                branch_id: branch.id,
+                product_id: product.id,
+                stock_count: product.stock,
+                status: 1
+              }));
+            });
+            const { error: invError } = await supabase.from('branch_inventory').upsert(inventoryUpdates, { onConflict: 'branch_id,product_id' });
+            if (invError) console.error("Inventory Upsert Error:", invError.message);
         }
       }
 

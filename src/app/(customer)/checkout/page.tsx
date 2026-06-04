@@ -678,18 +678,13 @@ export default function CheckoutPage() {
               <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'วันที่จัดส่ง' : 'วันที่เข้ารับสินค้า'}</label>
                 <input
-                  type={deliveryDate ? "date" : "text"}
-                  onFocus={(e) => (e.target.type = "date")}
-                  onBlur={(e) => {
-                    if (!e.target.value) e.target.type = "text";
-                  }}
+                  type="date"
                   required
                   title="เลือกวันที่"
-                  placeholder="วว/ดด/ปปปป"
                   min={minDateStr}
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="block w-full px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white text-base"
+                  className={`block w-full px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white text-base ${!deliveryDate ? 'text-gray-400' : 'text-gray-900'}`}
                 />
               </div>
               <div className="min-w-0">

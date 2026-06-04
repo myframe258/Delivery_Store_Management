@@ -363,19 +363,28 @@ export default function SuperAdminProductsPage() {
     setMissingMasterData(null);
     setPendingFileData(null);
 
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
     const reader = new FileReader();
+
     reader.onload = async (evt) => {
       try {
-        const arrayBuffer = evt.target?.result;
-        // เปลี่ยนจาก 'binary' เป็น 'array' เพื่อรองรับไฟล์ .csv (UTF-8) ป้องกันภาษาไทยเพี้ยน
-        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const data = evt.target?.result;
+        let wb;
+
+        if (isCsv) {
+          // สำหรับไฟล์ .csv ให้อ่านจาก String ที่ถูกถอดรหัสเป็น UTF-8 แล้ว
+          wb = XLSX.read(data, { type: 'string' });
+        } else {
+          // สำหรับไฟล์ .xlsx/.xls ให้อ่านจาก ArrayBuffer (ข้อมูลดิบ)
+          wb = XLSX.read(data, { type: 'array' });
+        }
+
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const jsonData = XLSX.utils.sheet_to_json(ws);
 
-        setPendingFileData(data);
-        await processFileData(data, categories, units);
-
+        setPendingFileData(jsonData);
+        await processFileData(jsonData, categories, units);
       } catch (err: any) {
         setImportErrors([`เกิดข้อผิดพลาดในการนำเข้า: ${err.message}`]);
         setIsImporting(false);
@@ -383,8 +392,14 @@ export default function SuperAdminProductsPage() {
         e.target.value = ''; // Reset file input
       }
     };
-    // อ่านไฟล์เป็น ArrayBuffer แทน BinaryString เพื่อรองรับ Encoding ของ .csv ได้อย่างสมบูรณ์
-    reader.readAsArrayBuffer(file);
+
+    if (isCsv) {
+      // บังคับให้อ่านไฟล์ .csv เป็น Text แบบ UTF-8 เพื่อแก้ปัญหาภาษาไทยเพี้ยน
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      // อ่านไฟล์ Excel (.xlsx, .xls) เป็นข้อมูลดิบ (binary) ตามปกติ
+      reader.readAsArrayBuffer(file);
+    }
   };
 
   const processFileData = async (data: any[], currentCategories: any[], currentUnits: any[]) => {

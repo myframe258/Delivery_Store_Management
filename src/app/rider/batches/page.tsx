@@ -57,7 +57,7 @@ export default async function RiderBatchesPage() {
     `)
     .eq('branch_id', userData.branch_id)
     .eq('driver_id', user.id) // <--- เพิ่มตัวกรองให้ดึงเฉพาะงานของ Rider คนปัจจุบัน
-    .in('batch_status', ['assigned', 'in_progress']) // <--- เอา pending ออก เพราะยังไม่มีคนรับงาน
+    .in('batch_status', ['assigned', 'in_progress', 'ready_for_pickup']) // <--- เพิ่ม ready_for_pickup เพื่อให้มองเห็นงานที่แพ็กเสร็จรอรับ
     .order('created_at', { ascending: false });
 
   // ดักจับ Error หากดึงข้อมูลล้มเหลว

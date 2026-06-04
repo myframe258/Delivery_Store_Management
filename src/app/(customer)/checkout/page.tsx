@@ -675,7 +675,7 @@ export default function CheckoutPage() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">{deliveryMethod === 'delivery' ? 'เลือกรอบจัดส่งสินค้า' : 'เลือกเวลาเข้ามารับสินค้า'}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
+              <div className="min-w-0 w-full">
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'วันที่จัดส่ง' : 'วันที่เข้ารับสินค้า'}</label>
                 <input
                   type="date"
@@ -685,10 +685,10 @@ export default function CheckoutPage() {
                   min={minDateStr}
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                 />
               </div>
-              <div>
+              <div className="min-w-0 w-full">
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'เวลารอบจัดส่ง' : 'เวลาที่คาดว่าจะมาถึง'}</label>
                 {slots.length === 0 ? (
                   <p className="text-sm text-gray-500">กำลังโหลดรอบจัดส่ง...</p>
@@ -721,13 +721,13 @@ export default function CheckoutPage() {
 
             <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="min-w-0 w-full">
                   <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อ" />
+                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อ" />
                 </div>
-                <div>
+                <div className="min-w-0 w-full">
                   <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
-                  <input required type="tel" name="phone" pattern="^0[0-9]{9}$" title="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก ที่ขึ้นต้นด้วย 0" maxLength={10} value={formData.phone} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="08XXXXXXXX" />
+                  <input required type="tel" name="phone" pattern="^0[0-9]{9}$" title="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก ที่ขึ้นต้นด้วย 0" maxLength={10} value={formData.phone} onChange={handleChange} className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="08XXXXXXXX" />
                 </div>
               </div>
               {deliveryMethod === 'delivery' && (
@@ -755,7 +755,7 @@ export default function CheckoutPage() {
                   )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (รายละเอียด)</label>
-                    <textarea required name="address" value={formData.address} onChange={(e) => { handleChange(e); setSelectedAddressId(null); }} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
+                    <textarea required name="address" value={formData.address} onChange={(e) => { handleChange(e); setSelectedAddressId(null); }} rows={3} className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
                   </div>
 
                   {user && addresses.length === 0 && (

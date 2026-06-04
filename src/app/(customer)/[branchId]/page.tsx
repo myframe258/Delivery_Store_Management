@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import BranchGuard from '@/components/utilities/BranchGuard';
@@ -31,12 +31,18 @@ type InventoryRecord = {
   products: ProductRecord | ProductRecord[] | null;
 };
 
+// ฟังก์ชันสำหรับสร้าง Client ที่ไม่ใช้ cookies() เพื่อหลีกเลี่ยง Error ใน unstable_cache
+const getPublicSupabase = () => createSupabaseClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 // --- Caching Functions ---
 
 // 1. Cache ข้อมูลสาขา (3600 วินาที / 1 ชั่วโมง)
 const getCachedBranch = unstable_cache(
   async (branchId: string) => {
-    const supabase = await createClient();
+    const supabase = getPublicSupabase();
     return await supabase
       .from('branches')
       .select('id, name, address, phone')
@@ -50,7 +56,7 @@ const getCachedBranch = unstable_cache(
 // 2. Cache ข้อมูลหมวดหมู่สินค้า (3600 วินาที / 1 ชั่วโมง)
 const getCachedCategories = unstable_cache(
   async () => {
-    const supabase = await createClient();
+    const supabase = getPublicSupabase();
     return await supabase
       .from('categories')
       .select('id, name, parent_id')
@@ -63,7 +69,7 @@ const getCachedCategories = unstable_cache(
 // 3. Cache ข้อมูลโปรโมชัน (3600 วินาที / 1 ชั่วโมง)
 const getCachedPromotions = unstable_cache(
   async (branchId: string) => {
-    const supabase = await createClient();
+    const supabase = getPublicSupabase();
     return await supabase
       .from('branch_promotions')
       .select('id, title, image_url, target_url')
@@ -78,7 +84,7 @@ const getCachedPromotions = unstable_cache(
 // 4. Cache สต็อกสินค้าและรายละเอียดสินค้า (60 วินาที / เพื่ออัปเดตสต็อกใกล้เคียง Real-time แต่ไม่ให้ DB พัง)
 const getCachedInventory = unstable_cache(
   async (branchId: string) => {
-    const supabase = await createClient();
+    const supabase = getPublicSupabase();
     return await supabase
       .from('branch_inventory')
       .select(`

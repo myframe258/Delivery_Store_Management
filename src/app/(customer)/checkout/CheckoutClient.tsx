@@ -70,19 +70,16 @@ export default function CheckoutClient({ branch, user, savedLocation }: { branch
       try {
         const { data, error } = await supabase
           .from('branch_inventory')
-          .select('product_id, discount_price, discount_end_date, products(price)')
+          .select('product_id, discount_price, products(price)')
           .eq('branch_id', branch.id)
           .in('product_id', productIds);
 
         if (!error && data) {
-          const liveData = data.map(inv => {
-            const isExpired = inv.discount_end_date && new Date(inv.discount_end_date).getTime() < new Date().getTime();
-            return {
+          const liveData = data.map(inv => ({
             id: inv.product_id,
             price: Array.isArray(inv.products) ? inv.products[0]?.price : (inv.products as any)?.price,
-            discount_price: isExpired ? null : inv.discount_price
-            };
-          });
+            discount_price: inv.discount_price
+          }));
           setLiveProducts(liveData);
         }
       } catch (err) {

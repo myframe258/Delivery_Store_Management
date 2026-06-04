@@ -3,26 +3,26 @@
 @theme {
   /* ชุดสี Primary ของคุณ */
   /* สีแดงหลัก: ปรับให้ดรอปลงจาก #ff0000 เล็กน้อย เพื่อไม่ให้แสบตาเกินไปเมื่ออยู่บนจอ */
-  --color-primary: #D31224;
+  /* --color-primary: #D31224; */
 
   /* สีแดงสว่าง: ใช้สำหรับตอนเอาเมาส์ชี้ (Hover state) หรือไฮไลท์ */
-  --color-primary-light: #FF4757;
+  /* --color-primary-light: #FF4757; */
 
   /* สีแดงเข้ม: ดึงมาจากขอบวงกลมด้านนอกสุดของโลโก้ ช่วยสร้างมิติ */
-  --color-primary-dark: #7A0A14;
+  /* --color-primary-dark: #7A0A14; */
 
   /* สีตัวอักษรบนพื้นสีหลัก: ต้องเป็น "สีขาว" เท่านั้น เพื่อให้ตัดกับสีแดงและอ่านง่ายที่สุด */
-  --color-primary-foreground: #FFFFFF;
+  /* --color-primary-foreground: #FFFFFF; */
 
   /* --- สีเพิ่มเติมที่แนะนำ --- */
 
   /* สีรอง (Accent): ดึงมาจาก "สีน้ำตาลของหมวกคาวบอย" ใช้สลับกับสีแดงเพื่อลดความเลี่ยน */
-  --color-secondary: #5C3A21;
-  --color-secondary-foreground: #FFFFFF;
+  /* --color-secondary: #5C3A21;
+  --color-secondary-foreground: #FFFFFF; */
 
   /* สีพื้นหลังเว็บไซต์: แนะนำสีครีมอ่อนๆ หรือขาว เพื่อให้สีแดงและโลโก้โดดเด่นขึ้นมา */
-  --color-background: #F9F6F0;
-  --color-text-main: #333333;
+  /* --color-background: #F9F6F0;
+  --color-text-main: #333333; */
   /* สีตัวอักษรทั่วไปบนพื้นสว่าง */
 
   /* ตั้งค่าชุด Font หลัก (เปลี่ยนชื่อ Font ตามที่คุณใช้งานจริง เช่น Prompt, Kanit) */
@@ -36,6 +36,6 @@ body {
   padding: 0;
   margin: 0;
   font-family: var(--font-sans); /* บังคับใช้ฟอนต์กับทั้งเว็บไซต์ */
-  background-color: var(--color-background);
-  color: var(--color-text-main);
+  /* background-color: var(--color-background);
+  color: var(--color-text-main); */
 }

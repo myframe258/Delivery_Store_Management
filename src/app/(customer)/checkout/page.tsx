@@ -617,14 +617,14 @@ export default function CheckoutPage() {
   if (items.length === 0 && !isSuccess) return null; // ป้องกัน UI กะพริบก่อนถูก Redirect
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4 md:px-8">
+    <div className="min-h-screen bg-gray-50 py-6 md:py-10 px-3 md:px-8">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* ฝั่งซ้าย: ฟอร์มที่อยู่ และ แผนที่ปักหมุด */}
         <div className="lg:col-span-2 space-y-6">
 
           {/* เลือกวิธีการจัดส่ง */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">รูปแบบการรับสินค้า</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -672,10 +672,10 @@ export default function CheckoutPage() {
           </div>
 
           {/* กล่องเลือกรอบจัดส่ง */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">{deliveryMethod === 'delivery' ? 'เลือกรอบจัดส่งสินค้า' : 'เลือกเวลาเข้ามารับสินค้า'}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="min-w-0 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'วันที่จัดส่ง' : 'วันที่เข้ารับสินค้า'}</label>
                 <input
                   type="date"
@@ -685,10 +685,10 @@ export default function CheckoutPage() {
                   min={minDateStr}
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  className="block w-full px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white text-base"
                 />
               </div>
-              <div className="min-w-0 w-full">
+              <div className="min-w-0">
                 <label className="block text-sm font-medium text-gray-700 mb-2">{deliveryMethod === 'delivery' ? 'เวลารอบจัดส่ง' : 'เวลาที่คาดว่าจะมาถึง'}</label>
                 {slots.length === 0 ? (
                   <p className="text-sm text-gray-500">กำลังโหลดรอบจัดส่ง...</p>
@@ -716,18 +716,18 @@ export default function CheckoutPage() {
             </div>
           </div>
           
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-6">ข้อมูลผู้ติดต่อ</h2>
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-4 md:mb-6">ข้อมูลผู้ติดต่อ</h2>
 
             <form id="checkout-form" onSubmit={handlePlaceOrder} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="min-w-0 w-full">
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อ" />
+                  <input required type="text" name="name" value={formData.name} onChange={handleChange} className="block w-full px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white text-base" placeholder="ระบุชื่อ" />
                 </div>
-                <div className="min-w-0 w-full">
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
-                  <input required type="tel" name="phone" pattern="^0[0-9]{9}$" title="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก ที่ขึ้นต้นด้วย 0" maxLength={10} value={formData.phone} onChange={handleChange} className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="08XXXXXXXX" />
+                  <input required type="tel" name="phone" pattern="^0[0-9]{9}$" title="กรุณากรอกเบอร์โทรศัพท์ 10 หลัก ที่ขึ้นต้นด้วย 0" maxLength={10} value={formData.phone} onChange={handleChange} className="block w-full px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white text-base" placeholder="08XXXXXXXX" />
                 </div>
               </div>
               {deliveryMethod === 'delivery' && (
@@ -753,9 +753,9 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                   )}
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่จัดส่ง (รายละเอียด)</label>
-                    <textarea required name="address" value={formData.address} onChange={(e) => { handleChange(e); setSelectedAddressId(null); }} rows={3} className="block w-full max-w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
+                    <textarea required name="address" value={formData.address} onChange={(e) => { handleChange(e); setSelectedAddressId(null); }} rows={3} className="block w-full px-3 md:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition bg-white text-base" placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..." />
                   </div>
 
                   {user && addresses.length === 0 && (
@@ -776,7 +776,7 @@ export default function CheckoutPage() {
 
 
           {deliveryMethod === 'delivery' ? (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200 animate-in fade-in zoom-in-95 duration-300">
               <h2 className="text-xl font-bold text-slate-800 mb-2">ปักหมุดตำแหน่งจัดส่ง</h2>
               <p className="text-sm text-gray-500 mb-6">เลื่อนหมุดสีน้ำเงินไปยังตำแหน่งที่ต้องการให้พนักงานไปส่งสินค้า</p>
               <div className="relative min-h-[350px]">
@@ -828,7 +828,7 @@ export default function CheckoutPage() {
               )}
             </div>
           ) : (
-            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-emerald-50 p-4 md:p-6 rounded-2xl border border-emerald-200 animate-in fade-in zoom-in-95 duration-300">
               <h3 className="text-lg font-bold text-emerald-800 mb-4 flex items-center gap-2">
                 <Store className="w-5 h-5" /> ข้อมูลสาขาที่ต้องไปรับสินค้า
               </h3>
@@ -848,7 +848,7 @@ export default function CheckoutPage() {
           )}
 
           {/* ส่วนเลือกช่องทางชำระเงิน */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold text-slate-800 mb-4">ช่องทางการชำระเงิน</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="relative cursor-pointer group">
@@ -957,8 +957,8 @@ export default function CheckoutPage() {
 
         {/* ฝั่งขวา: สรุปคำสั่งซื้อ (Order Summary) */}
         <div className="lg:col-span-1">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 sticky top-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-6">สรุปคำสั่งซื้อ</h2>
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-200 sticky top-6">
+            <h2 className="text-xl font-bold text-slate-800 mb-4 md:mb-6">สรุปคำสั่งซื้อ</h2>
 
             {hasPriceChanged && (
               <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 items-start">

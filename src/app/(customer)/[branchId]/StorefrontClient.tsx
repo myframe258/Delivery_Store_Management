@@ -5,6 +5,7 @@ import { Package, Search, LayoutGrid, AlertCircle, ChevronDown, ShoppingCart, Pl
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCartStore } from '@/store/cartStore';
+import ProductDetailModal from '@/components/ui/ProductDetailModal';
 
 interface Product {
   id: string;
@@ -52,6 +53,7 @@ export default function StorefrontClient({ products, categories, branchId, promo
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
   const [timeLefts, setTimeLefts] = useState<Record<string, { hours: number, minutes: number, seconds: number }>>({});
+  const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
 
   // สำหรับระบบเลื่อน (Drag to scroll) ใน Flash Sale บน Desktop
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -264,7 +266,8 @@ export default function StorefrontClient({ products, categories, branchId, promo
     return (
       <div 
         key={product.id} 
-        className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 group relative ${isHorizontal ? 'w-40 sm:w-48 shrink-0 snap-start' : 'h-full'} ${isOutOfStock ? 'border-gray-200 opacity-80' : 'border-slate-200 hover:shadow-xl hover:border-blue-300 hover:-translate-y-1'}`}
+        onClick={() => setSelectedProductDetail(product)}
+        className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 group relative cursor-pointer ${isHorizontal ? 'w-40 sm:w-48 shrink-0 snap-start' : 'h-full'} ${isOutOfStock ? 'border-gray-200 opacity-80' : 'border-slate-200 hover:shadow-xl hover:border-blue-300 hover:-translate-y-1'}`}
       >
         {/* Visual Badges (บ่งบอกประเภทหน่วยนับ) */}
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
@@ -299,6 +302,16 @@ export default function StorefrontClient({ products, categories, branchId, promo
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300"><Package className="w-8 h-8 mb-2 opacity-50" /><span className="text-xs font-medium">ไม่มีรูปภาพ</span></div>
           )}
+          
+          {/* View Details Button - Overlay on Hover */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300 flex items-center justify-center z-10">
+            <button 
+              onClick={(e) => { e.stopPropagation(); setSelectedProductDetail(product); }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/95 hover:bg-white text-blue-600 font-bold px-4 py-2 rounded-lg shadow-lg text-sm"
+            >
+              ดูรายละเอียด
+            </button>
+          </div>
         </div>
         
         <div className="p-3 sm:p-5 flex flex-col flex-grow">
@@ -322,12 +335,12 @@ export default function StorefrontClient({ products, categories, branchId, promo
               <button disabled className="w-full bg-slate-100 text-slate-400 font-bold py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm cursor-not-allowed border border-slate-200">สินค้าหมด</button>
             ) : quantity > 0 ? (
               <div className="w-full flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl overflow-hidden h-9 sm:h-11 shadow-sm">
-                <button onClick={(e) => { e.preventDefault(); const nextQuantity = Number((quantity - step).toFixed(2)); if (nextQuantity >= min) { updateQuantity(product.id, nextQuantity); } else { removeItem(product.id); } }} title="ลดจำนวน" className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"><Minus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+                <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); const nextQuantity = Number((quantity - step).toFixed(2)); if (nextQuantity >= min) { updateQuantity(product.id, nextQuantity); } else { removeItem(product.id); } }} title="ลดจำนวน" className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"><Minus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
                 <span className="font-bold text-sm sm:text-base text-blue-800 min-w-[2rem] px-1 text-center select-none">{displayQuantity}</span>
-                <button onClick={(e) => { e.preventDefault(); updateQuantity(product.id, Number((quantity + step).toFixed(2))); }} title="เพิ่มจำนวน" className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"><Plus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+                <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); updateQuantity(product.id, Number((quantity + step).toFixed(2))); }} title="เพิ่มจำนวน" className="w-10 sm:w-12 h-full flex items-center justify-center text-blue-600 hover:bg-blue-200 active:bg-blue-300 transition-colors"><Plus className="w-4 h-4 sm:w-5 sm:h-5" /></button>
               </div>
             ) : (
-              <button onClick={(e) => { e.preventDefault(); addItem({ ...product, price: activeDiscountPrice || product.price, branchId, quantity: min }); }} className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group">
+              <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); addItem({ ...product, price: activeDiscountPrice || product.price, branchId, quantity: min }); }} className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl h-9 sm:h-11 text-xs sm:text-sm font-bold transition-all duration-300 active:scale-95 shadow-sm group">
                 <ShoppingCart className="w-4 h-4 sm:w-4 sm:h-4 group-hover:scale-110 transition-transform" />
                 <span>เพิ่มลงตะกร้า</span>
               </button>
@@ -748,6 +761,14 @@ export default function StorefrontClient({ products, categories, branchId, promo
           </div>
         </div>
       </div>
+
+      {/* Product Detail Modal */}
+      <ProductDetailModal 
+        isOpen={selectedProductDetail !== null}
+        product={selectedProductDetail}
+        branchId={branchId}
+        onClose={() => setSelectedProductDetail(null)}
+      />
     </div>
     </div>
   );

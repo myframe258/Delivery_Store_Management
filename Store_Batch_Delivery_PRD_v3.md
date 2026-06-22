@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD) - Version 5 (Phase 2 In-Progress)
+# Product Requirements Document (PRD) - Version 1 
 **Project Name:** Multi-Branch Store & Batch Delivery Management System  
 **Document Status:** Phase 2 In-Progress
 

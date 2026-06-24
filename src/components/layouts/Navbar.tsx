@@ -25,7 +25,7 @@ export default function Navbar() {
     name: 'Batch_Delivery', // เปลี่ยนชื่อร้านที่นี่
     colorClass: '',   // ใช้สีหลักที่กำหนดใน tailwind.config.ts
     Icon: MapPin,                  // เปลี่ยนไอคอนที่นี่ (จาก lucide-react)
-    // logoImageUrl: '/logo.png'   // [ตัวเลือกเสริม] หากมีไฟล์รูปโลโก้ สามารถนำมาใช้แทน Icon ได้
+    logoImageUrl: '/logo.png'   // [ตัวเลือกเสริม] หากมีไฟล์รูปโลโก้ สามารถนำมาใช้แทน Icon ได้
   };
 
   const supabase = createBrowserClient(

@@ -22,10 +22,10 @@ export default function Navbar() {
 
   // 🌟 ตั้งค่าแบรนด์ของลูกค้า (โลโก้ และ สี) ตรงนี้เพื่อให้เปลี่ยนง่ายๆ สำหรับแต่ละโปรเจกต์
   const BRAND_CONFIG = {
-    name: 'BatchDelivery', // เปลี่ยนชื่อร้านที่นี่
+    name: 'Batch_Delivery', // เปลี่ยนชื่อร้านที่นี่
     colorClass: '',   // ใช้สีหลักที่กำหนดใน tailwind.config.ts
     Icon: MapPin,                  // เปลี่ยนไอคอนที่นี่ (จาก lucide-react)
-    logoImageUrl: '/logo.png'   // [ตัวเลือกเสริม] หากมีไฟล์รูปโลโก้ สามารถนำมาใช้แทน Icon ได้
+    // logoImageUrl: '/logo.png'   // [ตัวเลือกเสริม] หากมีไฟล์รูปโลโก้ สามารถนำมาใช้แทน Icon ได้
   };
 
   const supabase = createBrowserClient(

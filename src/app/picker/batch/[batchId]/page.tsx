@@ -94,25 +94,37 @@ export default function PickerBatchDetailPage() {
         if (!batch) return [];
         const itemMap = new Map<string, PickListItem>();
 
+        // --- NEW: Define units that imply the product is sold by weight and should be packed individually.
+        const WEIGHT_UNITS = ['kg', 'g', 'kilo', 'gram', 'กิโลกรัม', 'กรัม', 'ขีด'];
+
         batch.batch_items.forEach(bi => {
             bi.orders?.order_items?.forEach(oi => {
+                // Guard against incomplete data
+                if (!oi.products || !oi.products.id) return;
+
                 const pId = oi.products.id;
                 const qty = Number(oi.quantity);
                 const unit = Array.isArray(oi.products.product_units) ? oi.products.product_units[0] : oi.products.product_units;
                 const unitName = unit?.name || '';
                 
-                // ตรวจสอบว่าเป็นทศนิยมหรือไม่
-                const isDecimal = !Number.isInteger(qty);
+                // --- MODIFIED: Determine if an item should be grouped by quantity (like weights)
+                // or summed up (like individual pieces).
+                // This is true if the unit is a weight unit, OR if the quantity is a decimal.
+                const isPerPackItem = WEIGHT_UNITS.some(wUnit => unitName.toLowerCase().includes(wUnit)) || !Number.isInteger(qty);
                 
-                // ถ้าเป็นทศนิยม ให้แยก Key ตามน้ำหนัก (เช่น id_0.5) แต่ถ้าเป็นชิ้นเต็ม ให้ใช้ productId ปกติ
-                const mapKey = isDecimal ? `${pId}_${qty}` : pId;
+                // The mapKey determines how items are grouped.
+                // - Per-pack items (weights): Group by product AND quantity (e.g., "Chicken 1kg", "Chicken 0.5kg")
+                // - Unit-based items (pieces): Group only by product (e.g., "Coke Can")
+                const mapKey = isPerPackItem ? `${pId}_${qty}` : pId;
 
                 if (itemMap.has(mapKey)) {
                     const existing = itemMap.get(mapKey)!;
-                    if (isDecimal) {
-                        existing.bagCount += 1; // นับเพิ่มจำนวน "ถุง"
+                    if (isPerPackItem) {
+                        // For per-pack items, we don't sum the weight/quantity, we just count the number of packs/bags.
+                        existing.bagCount += 1; 
                     } else {
-                        existing.totalQuantity += qty; // บวกจำนวน "ชิ้น" ตามปกติ
+                        // For standard items (sold by piece), we sum the total quantity.
+                        existing.totalQuantity += qty; 
                     }
                 } else {
                     itemMap.set(mapKey, {
@@ -120,15 +132,21 @@ export default function PickerBatchDetailPage() {
                         productId: pId,
                         name: oi.products.name,
                         image_url: oi.products.image_url,
-                        totalQuantity: qty,
+                        totalQuantity: qty, // For per-pack items, this is the quantity of a single pack (e.g., 1 kg)
                         unit_name: unitName,
-                        isDecimal: isDecimal,
+                        // This flag tells the UI to render the "bag count" view.
+                        isDecimal: isPerPackItem, 
                         bagCount: 1
                     });
                 }
             });
         });
-        return Array.from(itemMap.values());
+        
+        const aggregatedItems = Array.from(itemMap.values());
+        // เรียงลำดับรายการตามชื่อสินค้า (A-Z) เพื่อให้ง่ายต่อการหยิบ
+        aggregatedItems.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+
+        return aggregatedItems;
     }, [batch]);
 
     // --- Actions ---

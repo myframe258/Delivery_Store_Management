@@ -6,12 +6,13 @@ import { useRouter, usePathname } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { useCartStore } from '@/store/cartStore';
 import { useBranchStore } from '@/store/branchStore';
-import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn, Megaphone, ChevronDown, Settings, List } from 'lucide-react';
+import { ShoppingCart, LogOut, User, Package, Map as MapIcon, Truck, MapPin, Home, Store, LogIn, Megaphone, ChevronDown, Settings, List, Menu, X } from 'lucide-react';
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -53,6 +54,11 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, [supabase.auth]);
 
+  // Close mobile menu on route change (for browser back/forward)
+  useEffect(() => {
+    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
+  }, [pathname]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/');
@@ -69,8 +75,8 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50 shadow-sm h-16 flex items-center">
-      <div className="max-w-7xl mx-auto w-full px-4 md:px-8 flex justify-between items-center text-slate-800">
+    <nav className="fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50 shadow-sm">
+      <div className="max-w-7xl mx-auto w-full px-4 md:px-8 flex justify-between items-center text-slate-800 h-16">
 
         {/* Logo / หน้าหลัก */}
         <Link href="/" className={`flex items-center gap-2 font-bold text-xl ${BRAND_CONFIG.colorClass} hover:opacity-80 transition`}>
@@ -188,7 +194,7 @@ export default function Navbar() {
         </div>
 
         {/* ส่วนขวา (ตะกร้า และ Auth) */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
 
           {/* ตะกร้าสินค้า */}
           {/* <Link href="/checkout" className="relative p-2 hover:bg-slate-50 rounded-full transition">
@@ -227,8 +233,75 @@ export default function Navbar() {
               เข้าสู่ระบบ
             </Link>
           )}
+
+          {/* Hamburger Menu Button (Mobile) */}
+          <div className="md:hidden">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              type="button"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              aria-controls="mobile-menu"
+              aria-expanded={isMobileMenuOpen}
+            >
+              <span className="sr-only">Open main menu</span>
+              {isMobileMenuOpen ? (
+                <X className="block h-6 w-6" aria-hidden="true" />
+              ) : (
+                <Menu className="block h-6 w-6" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden bg-white border-t border-gray-200" id="mobile-menu">
+          <div className="px-4 pt-2 pb-4 space-y-1">
+            <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">หน้าหลัก (ค้นหาสาขา)</Link>
+
+            {role === 'super_admin' && (
+                <>
+                    <div className="pt-3 pb-1 px-3 text-xs font-semibold text-gray-500 uppercase">จัดการระบบ</div>
+                    <Link href="/super-admin/branches" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">ข้อมูลสาขา</Link>
+                    <Link href="/super-admin/users" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">สิทธิ์ผู้ใช้งาน</Link>
+                    <Link href="/super-admin/products" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">ฐานข้อมูลสินค้า (Master)</Link>
+                    <Link href="/super-admin/branch-discounts" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">สต็อกรายสาขา</Link>
+                    <Link href="/super-admin/promotions" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">แบนเนอร์โปรโมชัน</Link>
+                    <Link href="/super-admin/categories" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">หมวดหมู่สินค้า</Link>
+                    <Link href="/super-admin/units" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">หน่วยนับสินค้า</Link>
+                    <Link href="/super-admin/delivery-slots" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">รอบจัดส่ง</Link>
+                </>
+            )}
+
+            {role === 'branch_admin' && (
+                <>
+                    <div className="pt-3 pb-1 px-3 text-xs font-semibold text-gray-500 uppercase">จัดการสาขา</div>
+                    <Link href="/branch-admin/inventory" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">จัดการสต็อกสินค้า</Link>
+                    <Link href="/picker/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">งานจัดของ</Link>
+                    <Link href="/branch-admin/batching" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">จัดรอบส่งสินค้า</Link>
+                    <Link href="/picker/pickups" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">ออเดอร์นัดรับที่ร้าน</Link>
+                    <Link href="/rider/batches" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">หน้าจอคนขับ (Rider)</Link>
+                </>
+            )}
+
+            {role === 'picker' && (
+                <>
+                    <Link href="/picker/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">งานจัดของ</Link>
+                    <Link href="/picker/pickups" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">ออเดอร์รับที่ร้าน</Link>
+                </>
+            )}
+
+            {role === 'rider' && (
+                <Link href="/rider/batches" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">งานส่งของ</Link>
+            )}
+
+            {(role === 'customer' || !role) && (
+                <Link href="/orders" onClick={() => setIsMobileMenuOpen(false)} className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600">การสั่งซื้อของฉัน</Link>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

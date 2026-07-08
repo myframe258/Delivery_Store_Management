@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import BranchMapWrapper from '@/components/maps/BranchMapWrapper';
+import type { Branch } from '@/store/branchStore';
 import BranchList from './BranchList';
 import Link from 'next/link';
 import { MapPin, Store, ArrowRight, ShoppingBag, Truck, ShieldCheck } from 'lucide-react';
@@ -11,12 +12,20 @@ export default async function CustomerHomePage() {
   const supabase = await createClient();
 
   // ดึงข้อมูลสาขาจาก DB (ทำงานบน Server)
-  const { data: branches, error } = await supabase
+  const { data: branchesData, error } = await supabase
     .from('branches')
     .select('id, name, lat, lng, address')
     .eq('is_active', true);
 
-  const hasBranches = branches && branches.length > 0;
+  // แก้ไข: แปลง lat/lng จาก string เป็น number เพื่อให้ตรงกับ Type ที่ Component ต้องการ
+  // และป้องกัน Build Error จาก TypeScript
+  const branches: Branch[] = branchesData ? branchesData.map(branch => ({
+    ...branch,
+    lat: parseFloat(branch.lat || '0'),
+    lng: parseFloat(branch.lng || '0'),
+  })) : [];
+
+  const hasBranches = branches.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 pb-16">

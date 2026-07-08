@@ -1,6 +1,7 @@
 'use client'; // บังคับให้เป็น Client Component
 
 import dynamic from 'next/dynamic';
+import type { Branch } from '@/store/branchStore';
 
 // โหลด BranchLocatorMap แบบ ssr: false
 const MapComponent = dynamic(
@@ -15,7 +16,7 @@ const MapComponent = dynamic(
     }
 );
 
-export default function BranchMapWrapper({ branches }: { branches: any[] }) {
+export default function BranchMapWrapper({ branches }: { branches: Branch[] }) {
     return (
         <div className="w-full h-[500px] rounded-xl overflow-hidden shadow-inner relative z-0">
             <MapComponent branches={branches} />

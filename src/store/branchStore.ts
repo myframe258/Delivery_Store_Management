@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 // Define interfaces for better type safety
-interface Branch {
+export interface Branch {
   id: string | number;
   name: string;
   lat: number;

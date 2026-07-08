@@ -121,47 +121,9 @@ export default async function CustomerHomePage() {
               </div>
               
               {/* รายชื่อสาขา */}
-              <div className="space-y-4 max-h-[535px] overflow-y-auto pr-1">
-                {branches.map((branch) => (
-                  <div 
-                    key={branch.id}
-                    className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">
-                          {branch.name}
-                        </h3>
-                        <span className="bg-emerald-50 text-emerald-700 text-xs px-2 py-0.5 rounded-md font-medium border border-emerald-100">
-                          เปิดให้บริการ
-                        </span>
-                      </div>
-                      <p className="text-slate-500 text-sm mt-2 line-clamp-2">
-                        {branch.address || "ไม่มีข้อมูลที่อยู่สาขา"}
-                      </p>
-                    </div>
-
-                    <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <Truck className="w-3.5 h-3.5 text-slate-400" /> รองรับจัดส่งเป็นรอบ
-                      </span>
-                      <Link 
-                        href={`/${branch.id}`}
-                        className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-4 py-2 rounded-xl transition-all shadow-md shadow-blue-200 hover:shadow-lg active:scale-95"
-                      >
-                        เข้าสู่หน้าร้านค้า
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+              <div className="max-h-[535px] overflow-y-auto pr-1 -mr-1">
+                <BranchList branches={branches} autoRedirectEnabled={true} className="space-y-4" />
               </div>
-
-              {/* Component เพิ่มเติมในกรณีที่ต้องการใช้ร่วมกับ BranchList ตัวเดิม */}
-              <div className="hidden">
-                <BranchList branches={branches} />
-              </div>
-
             </div>
 
           </div>

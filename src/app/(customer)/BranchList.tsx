@@ -58,37 +58,29 @@ export default function BranchList({ branches, autoRedirectEnabled = false, clas
         const { latitude, longitude } = position.coords;
         if (setUserLocation) setUserLocation({ lat: latitude, lng: longitude });
         
-        let nearestBranch: Branch | null = null;
-        let minDistance = Infinity;
+        // Refactor: Use `reduce` for a more robust and functional way to find the nearest branch.
+        // This avoids control-flow analysis issues with TypeScript in complex callbacks.
+        const nearest = branches.reduce(
+          (acc: { branch: Branch | null; distance: number }, currentBranch: Branch) => {
+            const distance = getDistance(latitude, longitude, currentBranch.lat, currentBranch.lng);
+            if (distance < acc.distance) {
+              return { branch: currentBranch, distance: distance };
+            }
+            return acc;
+          },
+          { branch: null, distance: Infinity }
+        );
 
-        branches.forEach((branch) => {
-          const distance = getDistance(latitude, longitude, branch.lat, branch.lng);
-          if (distance < minDistance) {
-            minDistance = distance;
-            nearestBranch = branch;
-          }
-        });
+        const nearestBranch = nearest.branch;
+        const minDistance = nearest.distance;
 
         if (setNearestBranch) setNearestBranch(nearestBranch);
 
         const MAX_DISTANCE_KM = 15; // กำหนดรัศมีสำหรับการ Redirect อัตโนมัติ (15 กม.)
 
-        // --- RESTRUCTURED LOGIC ---
-        // This structure is clearer for TypeScript's control flow analysis in nested callbacks.
-
-        // 1. First, check if a nearest branch was found at all.
-        if (nearestBranch === null) {
-          setStatus('no_branch_nearby');
-          setTimeout(() => setStatus('done'), 3000);
-          return;
-        }
-
-        // 2. If a branch was found, check if it's within the allowed distance.
-        if (minDistance <= MAX_DISTANCE_KM) {
-          // Now TypeScript is certain `nearestBranch` is a valid `Branch` object.
-          // We use the non-null assertion operator (!) here to tell TypeScript
-          // that we are certain `nearestBranch` is not null, resolving the control-flow analysis issue.
-          handleSelectBranch(nearestBranch!.id, true);
+        // With the `reduce` approach, this simple check is now perfectly clear to the compiler.
+        if (nearestBranch && minDistance <= MAX_DISTANCE_KM) {
+          handleSelectBranch(nearestBranch.id, true);
         } else {
           setStatus('no_branch_nearby');
           setTimeout(() => setStatus('done'), 3000);

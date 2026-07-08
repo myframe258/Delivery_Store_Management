@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import L, { LatLngExpression } from 'leaflet';
 import { useRouter } from 'next/navigation';
-import { useBranchStore } from '@/store/branchStore';
+import { useBranchStore, type Branch } from '@/store/branchStore';
 
 // แก้ปัญหา Next.js โหลดไอคอน Marker ของ Leaflet ไม่ขึ้น
 const icon = L.icon({
@@ -17,14 +17,6 @@ const icon = L.icon({
   tooltipAnchor: [16, -28],
   shadowSize: [41, 41]
 });
-
-interface Branch {
-  id: string | number;
-  name: string;
-  lat: number | string;
-  lng: number | string;
-  address?: string;
-}
 
 interface MapProps {
   branches: Branch[];
@@ -41,9 +33,9 @@ export default function BranchLocatorMap({ branches }: MapProps) {
   }, []);
 
   // Auto Center: กำหนดพิกัดเริ่มต้นไปที่สาขาแรก ถ้าไม่มีให้ใช้พิกัดกรุงเทพฯ
-  const mapCenter: [number, number] = branches?.length > 0 && branches[0].lat && branches[0].lng
-    ? [Number(branches[0].lat), Number(branches[0].lng)]
-    : [13.7563, 100.5018];
+  const mapCenter: LatLngExpression = branches?.length > 0 && branches[0].lat && branches[0].lng
+    ? [branches[0].lat, branches[0].lng]
+    : [13.7563, 100.5018]; // Default to Bangkok
 
   const handleSelectBranch = (branchId: string) => {
     // 1. บันทึก ID ลง Zustand (localStorage)
@@ -70,12 +62,9 @@ export default function BranchLocatorMap({ branches }: MapProps) {
       />
       
       {branches?.map((branch) => {
-        // แปลงค่าพิกัดให้เป็นตัวเลขเสมอ เผื่อกรณีที่ฐานข้อมูลส่งมาเป็น string
-        const lat = Number(branch.lat);
-        const lng = Number(branch.lng);
-
-        return lat && lng ? (
-          <Marker key={branch.id} position={[lat, lng]} icon={icon}>
+        // The lat/lng are guaranteed to be numbers from page.tsx
+        return (
+          <Marker key={branch.id} position={[branch.lat, branch.lng]} icon={icon}>
             <Popup>
               <div className="text-center p-1 min-w-[150px]">
                 <h3 className="font-bold text-base mb-1 text-slate-800">{branch.name}</h3>
@@ -88,7 +77,7 @@ export default function BranchLocatorMap({ branches }: MapProps) {
               </div>
             </Popup>
           </Marker>
-        ) : null;
+        );
       })}
     </MapContainer>
   );

@@ -2,16 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useBranchStore } from '@/store/branchStore'; 
+import { useBranchStore, type Branch } from '@/store/branchStore'; 
 import { Store, ArrowRight, MapPin, MapPinOff } from 'lucide-react';
-
-interface Branch {
-  id: string | number;
-  name: string;
-  lat: number;
-  lng: number;
-  address: string;
-}
 
 interface BranchListProps {
   branches: Branch[];
@@ -81,14 +73,25 @@ export default function BranchList({ branches, autoRedirectEnabled = false, clas
 
         const MAX_DISTANCE_KM = 15; // กำหนดรัศมีสำหรับการ Redirect อัตโนมัติ (15 กม.)
 
-        if (nearestBranch && minDistance <= MAX_DISTANCE_KM) {
-          handleSelectBranch(nearestBranch.id, true);
+        // --- RESTRUCTURED LOGIC ---
+        // This structure is clearer for TypeScript's control flow analysis in nested callbacks.
+
+        // 1. First, check if a nearest branch was found at all.
+        if (nearestBranch === null) {
+          setStatus('no_branch_nearby');
+          setTimeout(() => setStatus('done'), 3000);
+          return;
+        }
+
+        // 2. If a branch was found, check if it's within the allowed distance.
+        if (minDistance <= MAX_DISTANCE_KM) {
+          // Now TypeScript is certain `nearestBranch` is a valid `Branch` object.
+          // We use the non-null assertion operator (!) here to tell TypeScript
+          // that we are certain `nearestBranch` is not null, resolving the control-flow analysis issue.
+          handleSelectBranch(nearestBranch!.id, true);
         } else {
           setStatus('no_branch_nearby');
-          // แสดงข้อความ 3 วินาที แล้วค่อยแสดงรายชื่อสาขาทั้งหมด
-          setTimeout(() => {
-            setStatus('done');
-          }, 3000);
+          setTimeout(() => setStatus('done'), 3000);
         }
       },
       (error) => {
